@@ -99,6 +99,26 @@ Para parámetros opcionales, escribe **`null`** para dejarlos vacíos:
 - **Cuentas de crédito**: saldo negativo = deuda
 - Los IDs de registros se ven en `/registros` (nombre de cuenta)
 
+## Estructura del proyecto
+
+```
+finance_guy/
+├── src/
+│   ├── main.py          # Entry point del bot
+│   ├── config.py        # Constantes y estados
+│   ├── utils.py         # Utilidades (parse_cantidad, is_null, etc.)
+│   ├── database/        # Lógica de base de datos SQLite
+│   └── handlers/        # Comandos y flujos conversacionales
+│       ├── commands.py  # start, help, cuentas, resumen
+│       ├── cuentas.py   # crear_cuenta
+│       ├── movimientos.py   # gasto, ingreso, transferencia
+│       ├── historial.py     # registros, editar, eliminar
+│       └── resumenes.py     # resumen_categorias, resumen_mes
+├── bot.py               # Wrapper (ejecuta src.main)
+├── database.py          # Re-export para compatibilidad
+└── finanzas.db          # Base de datos (se crea al ejecutar)
+```
+
 ## Base de datos
 
 Los datos se guardan en `finanzas.db` (SQLite) en el directorio del proyecto. Cada usuario de Telegram tiene sus propias cuentas y transacciones aisladas.
