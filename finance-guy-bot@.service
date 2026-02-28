@@ -1,0 +1,17 @@
+[Unit]
+Description=Finance Guy - Bot de finanzas personales para Telegram
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/projects/finance_guy
+ExecStart=/home/%i/projects/finance_guy/.venv/bin/python -u bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
