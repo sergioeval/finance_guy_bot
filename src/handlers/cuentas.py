@@ -12,7 +12,7 @@ async def crear_cuenta_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def crear_cuenta_nombre(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data["crear_cuenta_nombre"] = update.message.text.strip()
+    context.user_data["crear_cuenta_nombre"] = update.message.text.strip().lower()
     await update.message.reply_text("¿Tipo? (credito o debito)")
     return CREAR_CUENTA_TIPO
 

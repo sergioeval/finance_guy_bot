@@ -21,7 +21,7 @@ async def registros_start(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def registros_cuenta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
-    nombre_cuenta = update.message.text.strip()
+    nombre_cuenta = update.message.text.strip().lower()
     registros, nombre = listar_registros(user_id, nombre_cuenta)
     if registros is None:
         await update.message.reply_text(nombre)
@@ -78,7 +78,7 @@ async def editar_monto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 
 async def editar_categoria(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text.strip()
+    text = update.message.text.strip().lower()
     monto = context.user_data.get("editar_monto")
     categoria = None if is_null(text) else text
     if monto is None and categoria is None:

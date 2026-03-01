@@ -69,7 +69,7 @@ def crear_cuenta(user_id: int, nombre: str, tipo: str) -> tuple[bool, str]:
     if tipo not in ("credito", "debito"):
         return False, "El tipo debe ser 'credito' o 'debito'."
 
-    nombre = nombre.strip()
+    nombre = nombre.strip().lower()
     if not nombre:
         return False, "El nombre de la cuenta no puede estar vacío."
 
@@ -96,7 +96,7 @@ def listar_cuentas(user_id: int) -> list[dict]:
 
 def obtener_cuenta_por_nombre(user_id: int, nombre: str) -> dict | None:
     """Obtiene una cuenta por nombre (case-insensitive)."""
-    nombre = nombre.strip()
+    nombre = nombre.strip().lower()
     with get_connection() as conn:
         row = conn.execute(
             "SELECT id, nombre, tipo, saldo FROM cuentas WHERE user_id = ? AND LOWER(nombre) = LOWER(?)",
@@ -114,7 +114,7 @@ def registrar_gasto(user_id: int, nombre_cuenta: str, monto: float, categoria: s
     if monto <= 0:
         return False, "El monto debe ser mayor a 0."
 
-    cat = (categoria or "sin_categoria").strip() or "sin_categoria"
+    cat = ((categoria or "sin_categoria").strip() or "sin_categoria").lower()
 
     with get_connection() as conn:
         if cuenta["tipo"] == "debito":
@@ -140,7 +140,7 @@ def registrar_ingreso(user_id: int, nombre_cuenta: str, monto: float, categoria:
     if monto <= 0:
         return False, "El monto debe ser mayor a 0."
 
-    cat = (categoria or "sin_categoria").strip() or "sin_categoria"
+    cat = ((categoria or "sin_categoria").strip() or "sin_categoria").lower()
     nuevo_saldo = cuenta["saldo"] + monto
 
     with get_connection() as conn:
@@ -355,7 +355,7 @@ def editar_registro(
 
     cat = None
     if categoria is not None:
-        cat = categoria.strip() or "sin_categoria"
+        cat = (categoria.strip() or "sin_categoria").lower()
 
     with get_connection() as conn:
         cuenta = conn.execute(

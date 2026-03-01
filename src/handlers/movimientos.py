@@ -24,7 +24,7 @@ async def gasto_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 
 async def gasto_cuenta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data["gasto_cuenta"] = update.message.text.strip()
+    context.user_data["gasto_cuenta"] = update.message.text.strip().lower()
     await update.message.reply_text("¿Monto?")
     return GASTO_MONTO
 
@@ -40,7 +40,7 @@ async def gasto_monto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 
 async def gasto_categoria(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    cat = update.message.text.strip()
+    cat = update.message.text.strip().lower()
     categoria = "sin_categoria" if is_null(cat) else cat
     user_id = update.effective_user.id
     cuenta = context.user_data["gasto_cuenta"]
@@ -56,7 +56,7 @@ async def ingreso_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 
 async def ingreso_cuenta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data["ingreso_cuenta"] = update.message.text.strip()
+    context.user_data["ingreso_cuenta"] = update.message.text.strip().lower()
     await update.message.reply_text("¿Monto?")
     return INGRESO_MONTO
 
@@ -72,7 +72,7 @@ async def ingreso_monto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 
 async def ingreso_categoria(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    cat = update.message.text.strip()
+    cat = update.message.text.strip().lower()
     categoria = "sin_categoria" if is_null(cat) else cat
     user_id = update.effective_user.id
     cuenta = context.user_data["ingreso_cuenta"]
@@ -88,13 +88,13 @@ async def transferencia_start(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def transferencia_origen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data["transferencia_origen"] = update.message.text.strip()
+    context.user_data["transferencia_origen"] = update.message.text.strip().lower()
     await update.message.reply_text("¿Cuenta destino?")
     return TRANSFERENCIA_DESTINO
 
 
 async def transferencia_destino(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data["transferencia_destino"] = update.message.text.strip()
+    context.user_data["transferencia_destino"] = update.message.text.strip().lower()
     await update.message.reply_text("¿Monto?")
     return TRANSFERENCIA_MONTO
 
