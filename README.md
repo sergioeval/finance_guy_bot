@@ -50,6 +50,12 @@ Asegúrate de tener el archivo `.env` con tu token:
 TELEGRAM_BOT_TOKEN=tu_token_aqui
 ```
 
+Opcional: para el resumen diario automático, puedes configurar la zona horaria (por defecto `Europe/Madrid`):
+
+```
+RESUMEN_DIARIO_TZ=America/Mexico_City
+```
+
 ## Ejecución
 
 ```bash
@@ -92,6 +98,10 @@ Para parámetros opcionales, escribe **`null`** para dejarlos vacíos:
 - **editar**: monto `null` → no cambia; categoría `null` → no cambia (al menos uno debe ser distinto de null)
 - **resumen_categorias**: mes `null` → todos; año `null` → todos
 - **resumen_mes**: año `null` → últimos 12 meses; mes `null` → todos los meses del año
+
+### Resumen diario automático
+
+El bot envía automáticamente el resumen de finanzas (equivalente a `/resumen`) **todos los días a las 10:00** a cada usuario que tenga al menos una cuenta. La zona horaria se configura con `RESUMEN_DIARIO_TZ` en `.env` (por defecto: `Europe/Madrid`).
 
 ### Notas
 

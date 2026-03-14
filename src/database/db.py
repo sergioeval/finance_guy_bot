@@ -84,6 +84,15 @@ def crear_cuenta(user_id: int, nombre: str, tipo: str) -> tuple[bool, str]:
         return False, f"Ya existe una cuenta con el nombre '{nombre}'."
 
 
+def obtener_ids_usuarios_con_cuentas() -> list[int]:
+    """Obtiene los user_id de todos los usuarios que tienen al menos una cuenta."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT user_id FROM cuentas ORDER BY user_id"
+        ).fetchall()
+    return [row[0] for row in rows]
+
+
 def listar_cuentas(user_id: int) -> list[dict]:
     """Lista todas las cuentas del usuario."""
     with get_connection() as conn:

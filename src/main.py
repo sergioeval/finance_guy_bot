@@ -1,13 +1,27 @@
 """Punto de entrada del bot."""
 import os
+from datetime import time
+from zoneinfo import ZoneInfo
+
 from dotenv import load_dotenv
 from telegram import BotCommand, Update
 from telegram.ext import Application, CommandHandler
 
-from src.database import init_db
+from src.database import init_db, obtener_ids_usuarios_con_cuentas
 from src.handlers import commands, conv_handler
 
 load_dotenv()
+
+
+async def send_resumen_diario(context) -> None:
+    """Envía el resumen diario a todos los usuarios con cuentas."""
+    for user_id in obtener_ids_usuarios_con_cuentas():
+        texto = commands.formatear_resumen(user_id)
+        if texto:
+            try:
+                await context.bot.send_message(chat_id=user_id, text=texto)
+            except Exception:
+                pass  # Usuario puede haber bloqueado el bot o no existir
 
 
 async def post_init(application: Application) -> None:
@@ -27,6 +41,14 @@ async def post_init(application: Application) -> None:
         BotCommand("resumen_categorias", "Resumen por categoría"),
         BotCommand("resumen_mes", "Resumen mensual"),
     ])
+
+    # Resumen diario automático a las 10:00 (zona configurable vía RESUMEN_DIARIO_TZ)
+    tz = ZoneInfo(os.getenv("RESUMEN_DIARIO_TZ", "Europe/Madrid"))
+    application.job_queue.run_daily(
+        send_resumen_diario,
+        time=time(10, 0, 0, tzinfo=tz),
+        name="resumen_diario",
+    )
 
 
 def main() -> None:

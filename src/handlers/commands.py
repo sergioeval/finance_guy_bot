@@ -71,13 +71,12 @@ async def cmd_cuentas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.message.reply_text("\n".join(lineas))
 
 
-async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
+def formatear_resumen(user_id: int) -> str | None:
+    """Genera el texto del resumen para un usuario. Retorna None si no tiene cuentas."""
     resumen = obtener_resumen(user_id)
     cuentas = resumen["cuentas"]
     if not cuentas:
-        await update.message.reply_text("No tienes ninguna cuenta. Usa /crear_cuenta para crear una.")
-        return
+        return None
     lineas = ["📊 Resumen de finanzas\n"]
     for c in cuentas:
         emoji = "💳" if c["tipo"] == "debito" else "📄"
@@ -86,4 +85,13 @@ async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     lineas.append(f"💰 Total débito: ${resumen['total_debito']:,.2f}")
     lineas.append(f"📄 Total crédito: ${resumen['total_credito']:,.2f}")
     lineas.append(f"📈 Patrimonio neto: ${resumen['patrimonio_neto']:,.2f}")
-    await update.message.reply_text("\n".join(lineas))
+    return "\n".join(lineas)
+
+
+async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    texto = formatear_resumen(user_id)
+    if texto is None:
+        await update.message.reply_text("No tienes ninguna cuenta. Usa /crear_cuenta para crear una.")
+        return
+    await update.message.reply_text(texto)
