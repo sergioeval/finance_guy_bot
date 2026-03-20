@@ -162,6 +162,39 @@ def registrar_ingreso(user_id: int, nombre_cuenta: str, monto: float, categoria:
     return True, f"Ingreso de ${monto:,.2f} registrado en '{cuenta['nombre']}' [{cat}]."
 
 
+def registrar_ajuste_saldo(user_id: int, nombre_cuenta: str, saldo_objetivo: float) -> tuple[bool, str]:
+    """Deja el saldo de la cuenta igual a saldo_objetivo mediante un ingreso o gasto con categoría 'ajuste'."""
+    cuenta = obtener_cuenta_por_nombre(user_id, nombre_cuenta)
+    if not cuenta:
+        return False, f"No se encontró la cuenta '{nombre_cuenta}'."
+
+    delta = saldo_objetivo - cuenta["saldo"]
+    if abs(delta) < 1e-9:
+        return True, f"El saldo de '{cuenta['nombre']}' ya es ${saldo_objetivo:,.2f}. No se registró ningún movimiento."
+
+    cat = "ajuste"
+    with get_connection() as conn:
+        if delta > 0:
+            nuevo_saldo = cuenta["saldo"] + delta
+            conn.execute(
+                "INSERT INTO transacciones (user_id, cuenta_id, tipo, monto, categoria) VALUES (?, ?, 'ingreso', ?, ?)",
+                (user_id, cuenta["id"], delta, cat),
+            )
+        else:
+            monto_gasto = -delta
+            nuevo_saldo = cuenta["saldo"] - monto_gasto
+            conn.execute(
+                "INSERT INTO transacciones (user_id, cuenta_id, tipo, monto, categoria) VALUES (?, ?, 'gasto', ?, ?)",
+                (user_id, cuenta["id"], monto_gasto, cat),
+            )
+        conn.execute("UPDATE cuentas SET saldo = ? WHERE id = ?", (nuevo_saldo, cuenta["id"]))
+
+    return True, (
+        f"Saldo de '{cuenta['nombre']}' ajustado a ${saldo_objetivo:,.2f} "
+        f"(registro [ajuste]: {'+' if delta > 0 else '-'}${abs(delta):,.2f})."
+    )
+
+
 def transferir(user_id: int, cuenta_origen: str, cuenta_destino: str, monto: float) -> tuple[bool, str]:
     """Transfiere dinero de una cuenta a otra."""
     if cuenta_origen.lower() == cuenta_destino.lower():

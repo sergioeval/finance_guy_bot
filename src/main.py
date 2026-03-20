@@ -40,6 +40,7 @@ async def post_init(application: Application) -> None:
         BotCommand("resumen", "Resumen total"),
         BotCommand("resumen_categorias", "Resumen por categoría"),
         BotCommand("resumen_mes", "Resumen mensual"),
+        BotCommand("ajustar", "Ajustar saldo de una cuenta"),
     ])
 
     # Resumen diario automático a las 10:00 (zona configurable vía RESUMEN_DIARIO_TZ)

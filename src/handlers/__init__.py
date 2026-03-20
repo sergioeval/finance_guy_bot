@@ -22,6 +22,8 @@ from src.config import (
     RESUMEN_CAT_ANO,
     RESUMEN_MES_ANO,
     RESUMEN_MES_MES,
+    AJUSTAR_CUENTA,
+    AJUSTAR_MONTO,
     TEXT,
 )
 from src.handlers import commands, cuentas, movimientos, historial, resumenes
@@ -37,6 +39,7 @@ conv_handler = ConversationHandler(
         CommandHandler("eliminar", historial.eliminar_start),
         CommandHandler("resumen_categorias", resumenes.resumen_cat_start),
         CommandHandler("resumen_mes", resumenes.resumen_mes_start),
+        CommandHandler("ajustar", movimientos.ajustar_start),
     ],
     states={
         CREAR_CUENTA_NOMBRE: [MessageHandler(TEXT, cuentas.crear_cuenta_nombre)],
@@ -59,6 +62,8 @@ conv_handler = ConversationHandler(
         RESUMEN_CAT_ANO: [MessageHandler(TEXT, resumenes.resumen_cat_ano)],
         RESUMEN_MES_ANO: [MessageHandler(TEXT, resumenes.resumen_mes_ano)],
         RESUMEN_MES_MES: [MessageHandler(TEXT, resumenes.resumen_mes_mes)],
+        AJUSTAR_CUENTA: [MessageHandler(TEXT, movimientos.ajustar_cuenta)],
+        AJUSTAR_MONTO: [MessageHandler(TEXT, movimientos.ajustar_monto)],
     },
     fallbacks=[
         CommandHandler("cancel", commands.cmd_cancel),
@@ -71,5 +76,6 @@ conv_handler = ConversationHandler(
         CommandHandler("eliminar", historial.eliminar_start),
         CommandHandler("resumen_categorias", resumenes.resumen_cat_start),
         CommandHandler("resumen_mes", resumenes.resumen_mes_start),
+        CommandHandler("ajustar", movimientos.ajustar_start),
     ],
 )

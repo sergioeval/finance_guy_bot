@@ -30,6 +30,8 @@ Los comandos piden cada parámetro <b>paso a paso</b>. Para parámetros opcional
 
 /transferencia — Te pedirá: cuenta origen, cuenta destino, monto
 
+/ajustar — Te pedirá: cuenta, saldo deseado (deja el saldo igual a ese monto con registro [ajuste])
+
 <b>Historial</b>
 /registros — Te pedirá: nombre de cuenta
 

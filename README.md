@@ -75,6 +75,7 @@ python bot.py
 | `/gasto` | Registrar gasto (cuenta, monto, categoría) |
 | `/ingreso` | Registrar ingreso (cuenta, monto, categoría) |
 | `/transferencia` | Transferir (origen, destino, monto) |
+| `/ajustar` | Fijar saldo de una cuenta (cuenta, saldo deseado; registro [ajuste]) |
 | `/registros` | Listar movimientos (nombre de cuenta) |
 | `/editar` | Editar gasto/ingreso (ID, monto, categoría) |
 | `/eliminar` | Eliminar registro por ID |

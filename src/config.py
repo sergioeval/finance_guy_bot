@@ -23,7 +23,9 @@ from telegram.ext import ConversationHandler, filters
     RESUMEN_CAT_ANO,
     RESUMEN_MES_ANO,
     RESUMEN_MES_MES,
-) = range(20)
+    AJUSTAR_CUENTA,
+    AJUSTAR_MONTO,
+) = range(22)
 
 END = ConversationHandler.END
 

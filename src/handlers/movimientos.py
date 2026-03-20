@@ -12,9 +12,11 @@ from src.config import (
     TRANSFERENCIA_ORIGEN,
     TRANSFERENCIA_DESTINO,
     TRANSFERENCIA_MONTO,
+    AJUSTAR_CUENTA,
+    AJUSTAR_MONTO,
     END,
 )
-from src.database import registrar_gasto, registrar_ingreso, transferir
+from src.database import registrar_gasto, registrar_ingreso, registrar_ajuste_saldo, transferir
 from src.utils import is_null, parse_cantidad
 
 
@@ -108,5 +110,28 @@ async def transferencia_monto(update: Update, context: ContextTypes.DEFAULT_TYPE
     origen = context.user_data["transferencia_origen"]
     destino = context.user_data["transferencia_destino"]
     exito, mensaje = transferir(user_id, origen, destino, monto)
+    await update.message.reply_text(mensaje)
+    return END
+
+
+async def ajustar_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("¿Qué cuenta quieres ajustar?")
+    return AJUSTAR_CUENTA
+
+
+async def ajustar_cuenta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["ajustar_cuenta"] = update.message.text.strip().lower()
+    await update.message.reply_text("¿Saldo deseado? (la cuenta quedará exactamente con ese monto)")
+    return AJUSTAR_MONTO
+
+
+async def ajustar_monto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    saldo_objetivo = parse_cantidad(update.message.text)
+    if saldo_objetivo is None:
+        await update.message.reply_text("Monto inválido. Escribe un número (ej. 1500 o -50).")
+        return AJUSTAR_MONTO
+    user_id = update.effective_user.id
+    cuenta = context.user_data["ajustar_cuenta"]
+    _, mensaje = registrar_ajuste_saldo(user_id, cuenta, saldo_objetivo)
     await update.message.reply_text(mensaje)
     return END
