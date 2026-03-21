@@ -46,6 +46,15 @@ Los comandos piden cada parámetro <b>paso a paso</b>. Para parámetros opcional
 
 /resumen_mes — Te pedirá: año (null = últimos 12 meses), mes (null = todos)
 
+<b>Presupuesto</b> (una sola lista por usuario; tabla aparte; no afecta cuentas ni transacciones)
+/gasto_presupuesto — Monto, ¿anual? (si = total año, se divide entre 12 en totales; null = mensual), categoría
+
+/ingreso_presupuesto — Igual, como ingreso planificado
+
+/resumen_presupuesto — Lista #id, totales y balance (sin preguntas)
+
+/editar_registro_presupuesto — ID (ver /resumen_presupuesto), monto y/o categoría (null = no cambiar)
+
 <b>Otros</b>
 /cancel — Cancela el comando actual
 /help — Esta ayuda"""

@@ -8,7 +8,7 @@ from telegram import BotCommand, Update
 from telegram.ext import Application, CommandHandler
 
 from src.database import init_db, obtener_ids_usuarios_con_cuentas
-from src.handlers import commands, conv_handler
+from src.handlers import commands, conv_handler, presupuesto
 
 load_dotenv()
 
@@ -41,6 +41,10 @@ async def post_init(application: Application) -> None:
         BotCommand("resumen_categorias", "Resumen por categoría"),
         BotCommand("resumen_mes", "Resumen mensual"),
         BotCommand("ajustar", "Ajustar saldo de una cuenta"),
+        BotCommand("gasto_presupuesto", "Gasto al presupuesto mensual"),
+        BotCommand("ingreso_presupuesto", "Ingreso al presupuesto mensual"),
+        BotCommand("editar_registro_presupuesto", "Editar registro de presupuesto"),
+        BotCommand("resumen_presupuesto", "Resumen del presupuesto mensual"),
     ])
 
     # Resumen diario automático a las 10:00 (zona configurable vía RESUMEN_DIARIO_TZ)
@@ -66,6 +70,7 @@ def main() -> None:
     app.add_handler(CommandHandler("help", commands.cmd_help))
     app.add_handler(CommandHandler("cuentas", commands.cmd_cuentas))
     app.add_handler(CommandHandler("resumen", commands.cmd_resumen))
+    app.add_handler(CommandHandler("resumen_presupuesto", presupuesto.cmd_resumen_presupuesto))
     app.add_handler(conv_handler)
 
     print("Bot iniciado. Presiona Ctrl+C para detener.")

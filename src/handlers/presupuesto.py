@@ -1,0 +1,213 @@
+"""Presupuesto único por usuario (tabla presupuesto_movimientos; sin periodo año/mes)."""
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from src.config import (
+    GASTO_PRESUPUESTO_MONTO,
+    GASTO_PRESUPUESTO_ANUAL,
+    GASTO_PRESUPUESTO_CATEGORIA,
+    INGRESO_PRESUPUESTO_MONTO,
+    INGRESO_PRESUPUESTO_CATEGORIA,
+    EDITAR_PRESUPUESTO_ID,
+    EDITAR_PRESUPUESTO_MONTO,
+    EDITAR_PRESUPUESTO_CATEGORIA,
+    END,
+)
+from src.database import (
+    agregar_presupuesto_registro,
+    editar_presupuesto_registro,
+    listar_presupuesto,
+    totales_presupuesto,
+)
+from src.utils import is_null, parse_cantidad
+
+
+def _formatear_linea_presupuesto(r: dict) -> str:
+    tipo_emoji = "📤" if r["tipo"] == "gasto" else "📥"
+    tipo_txt = "Gasto" if r["tipo"] == "gasto" else "Ingreso"
+    es_anual = bool(r.get("es_anual", 0))
+    if r["tipo"] == "gasto" and es_anual:
+        mensual = r["monto"] / 12.0
+        monto_str = f"${r['monto']:,.2f}/año → ${mensual:,.2f}/mes"
+    else:
+        monto_str = f"${r['monto']:,.2f}"
+    return (
+        f"#{r['id']} {tipo_emoji} {tipo_txt} | [{r.get('categoria', 'sin_categoria')}] "
+        f"| {monto_str}"
+    )
+
+
+def _parse_gasto_anual(text: str) -> bool | None:
+    """True = gasto anual, False = mensual, None = respuesta no reconocida."""
+    t = text.strip().lower()
+    if is_null(t) or t in ("no", "n", "false", "f", "0", "mensual"):
+        return False
+    if t in ("si", "sí", "s", "yes", "y", "true", "1", "anual", "año", "ano"):
+        return True
+    return None
+
+
+async def gasto_presupuesto_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("¿Monto?")
+    return GASTO_PRESUPUESTO_MONTO
+
+
+async def gasto_presupuesto_monto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    monto = parse_cantidad(update.message.text)
+    if monto is None or monto <= 0:
+        await update.message.reply_text("Monto inválido. Escribe un número mayor a 0.")
+        return GASTO_PRESUPUESTO_MONTO
+    context.user_data["pres_gasto_monto"] = monto
+    await update.message.reply_text(
+        "¿El monto anterior es un total anual (no mensual)?\n"
+        "• si — en totales se usará ese monto ÷ 12 como gasto mensual\n"
+        "• no o null — el monto ya es mensual"
+    )
+    return GASTO_PRESUPUESTO_ANUAL
+
+
+async def gasto_presupuesto_anual(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    parsed = _parse_gasto_anual(update.message.text)
+    if parsed is None:
+        await update.message.reply_text(
+            "Responde si, no o null (mensual). Ejemplos: si, no, anual, mensual."
+        )
+        return GASTO_PRESUPUESTO_ANUAL
+    context.user_data["pres_gasto_es_anual"] = parsed
+    await update.message.reply_text("¿Categoría? (o null para sin_categoria)")
+    return GASTO_PRESUPUESTO_CATEGORIA
+
+
+async def gasto_presupuesto_categoria(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    cat = update.message.text.strip().lower()
+    categoria = "sin_categoria" if is_null(cat) else cat
+    user_id = update.effective_user.id
+    monto = context.user_data["pres_gasto_monto"]
+    es_anual = bool(context.user_data.get("pres_gasto_es_anual", False))
+    _, mensaje = agregar_presupuesto_registro(
+        user_id, "gasto", monto, categoria, es_anual=es_anual
+    )
+    await update.message.reply_text(mensaje)
+    return END
+
+
+async def ingreso_presupuesto_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("¿Monto?")
+    return INGRESO_PRESUPUESTO_MONTO
+
+
+async def ingreso_presupuesto_monto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    monto = parse_cantidad(update.message.text)
+    if monto is None or monto <= 0:
+        await update.message.reply_text("Monto inválido. Escribe un número mayor a 0.")
+        return INGRESO_PRESUPUESTO_MONTO
+    context.user_data["pres_ing_monto"] = monto
+    await update.message.reply_text("¿Categoría? (o null para sin_categoria)")
+    return INGRESO_PRESUPUESTO_CATEGORIA
+
+
+async def ingreso_presupuesto_categoria(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    cat = update.message.text.strip().lower()
+    categoria = "sin_categoria" if is_null(cat) else cat
+    user_id = update.effective_user.id
+    monto = context.user_data["pres_ing_monto"]
+    _, mensaje = agregar_presupuesto_registro(user_id, "ingreso", monto, categoria)
+    await update.message.reply_text(mensaje)
+    return END
+
+
+async def editar_registro_presupuesto_start(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> int:
+    await update.message.reply_text(
+        "¿ID del registro? (usa /resumen_presupuesto para ver los IDs)"
+    )
+    return EDITAR_PRESUPUESTO_ID
+
+
+async def editar_presupuesto_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    try:
+        rid = int(update.message.text.strip())
+    except ValueError:
+        await update.message.reply_text("ID inválido. Escribe un número.")
+        return EDITAR_PRESUPUESTO_ID
+    context.user_data["pres_edit_id"] = rid
+    await update.message.reply_text(
+        "¿Nuevo monto? (o null para no cambiar). "
+        "Si la línea es gasto anual, escribe el total anual."
+    )
+    return EDITAR_PRESUPUESTO_MONTO
+
+
+async def editar_presupuesto_monto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip()
+    if is_null(text):
+        context.user_data["pres_edit_monto"] = None
+    else:
+        monto = parse_cantidad(text)
+        if monto is not None and monto > 0:
+            context.user_data["pres_edit_monto"] = monto
+        else:
+            context.user_data["pres_edit_monto"] = None
+    await update.message.reply_text("¿Nueva categoría? (o null para no cambiar)")
+    return EDITAR_PRESUPUESTO_CATEGORIA
+
+
+async def editar_presupuesto_categoria(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip().lower()
+    monto = context.user_data.get("pres_edit_monto")
+    categoria = None if is_null(text) else text
+    if monto is None and categoria is None:
+        await update.message.reply_text(
+            "Debes cambiar al menos monto o categoría. Usa /editar_registro_presupuesto para reintentar."
+        )
+        return END
+    user_id = update.effective_user.id
+    rid = context.user_data["pres_edit_id"]
+    _, mensaje = editar_presupuesto_registro(user_id, rid, monto=monto, categoria=categoria)
+    await update.message.reply_text(mensaje)
+    return END
+
+
+async def cmd_resumen_presupuesto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    registros = listar_presupuesto(user_id)
+    t = totales_presupuesto(user_id)
+    lineas = ["📒 Tu presupuesto (planificado)\n"]
+    if not registros:
+        lineas.append("Aún no hay líneas. Usa /gasto_presupuesto o /ingreso_presupuesto.")
+    else:
+        gastos = [r for r in registros if r["tipo"] == "gasto"]
+        ingresos_list = [r for r in registros if r["tipo"] == "ingreso"]
+        LIMITE = 30
+
+        lineas.append("📤 Gastos")
+        if not gastos:
+            lineas.append("  (ninguno)")
+        else:
+            for r in gastos[:LIMITE]:
+                lineas.append(_formatear_linea_presupuesto(r))
+            if len(gastos) > LIMITE:
+                lineas.append(f"  ... y {len(gastos) - LIMITE} más.")
+
+        lineas.append("")
+        lineas.append("─────────────────────")
+        lineas.append("")
+
+        lineas.append("📥 Ingresos")
+        if not ingresos_list:
+            lineas.append("  (ninguno)")
+        else:
+            for r in ingresos_list[:LIMITE]:
+                lineas.append(_formatear_linea_presupuesto(r))
+            if len(ingresos_list) > LIMITE:
+                lineas.append(f"  ... y {len(ingresos_list) - LIMITE} más.")
+
+        lineas.append("")
+    lineas.append(f"Total gastos planificados (mensual): ${t['total_gasto']:,.2f}")
+    lineas.append(f"Total ingresos planificados: ${t['total_ingreso']:,.2f}")
+    lineas.append(f"Balance (ingresos − gastos): ${t['balance']:,.2f}")
+    lineas.append("(Los gastos anuales entran en el total como monto ÷ 12.)")
+    if registros:
+        lineas.append("\nEdita con /editar_registro_presupuesto usando el #id.")
+    await update.message.reply_text("\n".join(lineas))

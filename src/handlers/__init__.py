@@ -24,9 +24,17 @@ from src.config import (
     RESUMEN_MES_MES,
     AJUSTAR_CUENTA,
     AJUSTAR_MONTO,
+    GASTO_PRESUPUESTO_MONTO,
+    GASTO_PRESUPUESTO_ANUAL,
+    GASTO_PRESUPUESTO_CATEGORIA,
+    INGRESO_PRESUPUESTO_MONTO,
+    INGRESO_PRESUPUESTO_CATEGORIA,
+    EDITAR_PRESUPUESTO_ID,
+    EDITAR_PRESUPUESTO_MONTO,
+    EDITAR_PRESUPUESTO_CATEGORIA,
     TEXT,
 )
-from src.handlers import commands, cuentas, movimientos, historial, resumenes
+from src.handlers import commands, cuentas, movimientos, historial, resumenes, presupuesto
 
 conv_handler = ConversationHandler(
     entry_points=[
@@ -40,6 +48,12 @@ conv_handler = ConversationHandler(
         CommandHandler("resumen_categorias", resumenes.resumen_cat_start),
         CommandHandler("resumen_mes", resumenes.resumen_mes_start),
         CommandHandler("ajustar", movimientos.ajustar_start),
+        CommandHandler("gasto_presupuesto", presupuesto.gasto_presupuesto_start),
+        CommandHandler("ingreso_presupuesto", presupuesto.ingreso_presupuesto_start),
+        CommandHandler(
+            "editar_registro_presupuesto",
+            presupuesto.editar_registro_presupuesto_start,
+        ),
     ],
     states={
         CREAR_CUENTA_NOMBRE: [MessageHandler(TEXT, cuentas.crear_cuenta_nombre)],
@@ -64,6 +78,20 @@ conv_handler = ConversationHandler(
         RESUMEN_MES_MES: [MessageHandler(TEXT, resumenes.resumen_mes_mes)],
         AJUSTAR_CUENTA: [MessageHandler(TEXT, movimientos.ajustar_cuenta)],
         AJUSTAR_MONTO: [MessageHandler(TEXT, movimientos.ajustar_monto)],
+        GASTO_PRESUPUESTO_MONTO: [MessageHandler(TEXT, presupuesto.gasto_presupuesto_monto)],
+        GASTO_PRESUPUESTO_ANUAL: [MessageHandler(TEXT, presupuesto.gasto_presupuesto_anual)],
+        GASTO_PRESUPUESTO_CATEGORIA: [
+            MessageHandler(TEXT, presupuesto.gasto_presupuesto_categoria)
+        ],
+        INGRESO_PRESUPUESTO_MONTO: [MessageHandler(TEXT, presupuesto.ingreso_presupuesto_monto)],
+        INGRESO_PRESUPUESTO_CATEGORIA: [
+            MessageHandler(TEXT, presupuesto.ingreso_presupuesto_categoria)
+        ],
+        EDITAR_PRESUPUESTO_ID: [MessageHandler(TEXT, presupuesto.editar_presupuesto_id)],
+        EDITAR_PRESUPUESTO_MONTO: [MessageHandler(TEXT, presupuesto.editar_presupuesto_monto)],
+        EDITAR_PRESUPUESTO_CATEGORIA: [
+            MessageHandler(TEXT, presupuesto.editar_presupuesto_categoria)
+        ],
     },
     fallbacks=[
         CommandHandler("cancel", commands.cmd_cancel),
@@ -77,5 +105,11 @@ conv_handler = ConversationHandler(
         CommandHandler("resumen_categorias", resumenes.resumen_cat_start),
         CommandHandler("resumen_mes", resumenes.resumen_mes_start),
         CommandHandler("ajustar", movimientos.ajustar_start),
+        CommandHandler("gasto_presupuesto", presupuesto.gasto_presupuesto_start),
+        CommandHandler("ingreso_presupuesto", presupuesto.ingreso_presupuesto_start),
+        CommandHandler(
+            "editar_registro_presupuesto",
+            presupuesto.editar_registro_presupuesto_start,
+        ),
     ],
 )

@@ -16,6 +16,11 @@ from .db import (
     obtener_resumen_por_mes,
     obtener_cuenta_por_nombre,
     obtener_transaccion,
+    agregar_presupuesto_registro,
+    obtener_presupuesto_registro,
+    editar_presupuesto_registro,
+    listar_presupuesto,
+    totales_presupuesto,
 )
 
 __all__ = [
@@ -35,4 +40,9 @@ __all__ = [
     "obtener_resumen_por_mes",
     "obtener_cuenta_por_nombre",
     "obtener_transaccion",
+    "agregar_presupuesto_registro",
+    "obtener_presupuesto_registro",
+    "editar_presupuesto_registro",
+    "listar_presupuesto",
+    "totales_presupuesto",
 ]

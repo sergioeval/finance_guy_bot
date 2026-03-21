@@ -61,6 +61,80 @@ def init_db():
             conn.execute("ALTER TABLE transacciones ADD COLUMN categoria TEXT DEFAULT 'sin_categoria'")
         except sqlite3.OperationalError:
             pass
+        _ensure_presupuesto_tabla(conn)
+        _ensure_presupuesto_es_anual(conn)
+
+
+def _ensure_presupuesto_es_anual(conn: sqlite3.Connection) -> None:
+    """Añade es_anual (gasto anual → se usa monto/12 en totales) si la tabla ya existía sin la columna."""
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='presupuesto_movimientos'"
+    ).fetchone()
+    if not row:
+        return
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(presupuesto_movimientos)")}
+    if "es_anual" in cols:
+        return
+    try:
+        conn.execute(
+            "ALTER TABLE presupuesto_movimientos ADD COLUMN es_anual INTEGER NOT NULL DEFAULT 0"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
+def _ensure_presupuesto_tabla(conn: sqlite3.Connection) -> None:
+    """Crea la tabla de presupuesto (única por usuario, sin periodo) o migra la versión con año/mes."""
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='presupuesto_movimientos'"
+    ).fetchone()
+    if not row:
+        conn.execute("""
+            CREATE TABLE presupuesto_movimientos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                tipo TEXT NOT NULL CHECK(tipo IN ('gasto', 'ingreso')),
+                monto REAL NOT NULL,
+                categoria TEXT NOT NULL DEFAULT 'sin_categoria',
+                es_anual INTEGER NOT NULL DEFAULT 0 CHECK(es_anual IN (0, 1)),
+                creada_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        return
+
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(presupuesto_movimientos)")}
+    if "ano" not in cols:
+        return
+
+    conn.execute("""
+        CREATE TABLE presupuesto_movimientos_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            tipo TEXT NOT NULL CHECK(tipo IN ('gasto', 'ingreso')),
+            monto REAL NOT NULL,
+            categoria TEXT NOT NULL DEFAULT 'sin_categoria',
+            es_anual INTEGER NOT NULL DEFAULT 0 CHECK(es_anual IN (0, 1)),
+            creada_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        INSERT INTO presupuesto_movimientos_new (id, user_id, tipo, monto, categoria, es_anual, creada_en)
+        SELECT id, user_id, tipo, monto, categoria, 0, creada_en FROM presupuesto_movimientos
+    """)
+    conn.execute("DROP TABLE presupuesto_movimientos")
+    conn.execute("ALTER TABLE presupuesto_movimientos_new RENAME TO presupuesto_movimientos")
+    mx = conn.execute(
+        "SELECT COALESCE(MAX(id), 0) FROM presupuesto_movimientos"
+    ).fetchone()[0]
+    cur = conn.execute(
+        "UPDATE sqlite_sequence SET seq = ? WHERE name = 'presupuesto_movimientos'",
+        (mx,),
+    )
+    if cur.rowcount == 0:
+        conn.execute(
+            "INSERT INTO sqlite_sequence (name, seq) VALUES ('presupuesto_movimientos', ?)",
+            (mx,),
+        )
 
 
 def crear_cuenta(user_id: int, nombre: str, tipo: str) -> tuple[bool, str]:
@@ -97,7 +171,7 @@ def listar_cuentas(user_id: int) -> list[dict]:
     """Lista todas las cuentas del usuario."""
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT id, nombre, tipo, saldo FROM cuentas WHERE user_id = ? ORDER BY nombre",
+            "SELECT id, nombre, tipo, saldo FROM cuentas WHERE user_id = ? ORDER BY nombre COLLATE NOCASE",
             (user_id,)
         ).fetchall()
     return [dict(row) for row in rows]
@@ -265,13 +339,15 @@ def obtener_resumen_por_categoria(
         gastos = conn.execute(f"""
             SELECT COALESCE(categoria, 'sin_categoria') AS categoria, SUM(monto) AS total
             FROM transacciones WHERE tipo = 'gasto' {filtro}
-            GROUP BY COALESCE(categoria, 'sin_categoria') ORDER BY total DESC
+            GROUP BY COALESCE(categoria, 'sin_categoria')
+            ORDER BY categoria COLLATE NOCASE ASC
         """, params).fetchall()
 
         ingresos = conn.execute(f"""
             SELECT COALESCE(categoria, 'sin_categoria') AS categoria, SUM(monto) AS total
             FROM transacciones WHERE tipo = 'ingreso' {filtro}
-            GROUP BY COALESCE(categoria, 'sin_categoria') ORDER BY total DESC
+            GROUP BY COALESCE(categoria, 'sin_categoria')
+            ORDER BY categoria COLLATE NOCASE ASC
         """, params).fetchall()
 
         total_g = conn.execute(f"""
@@ -318,7 +394,7 @@ def obtener_resumen_por_mes(
                 FROM transacciones
                 WHERE user_id = ? AND tipo IN ('gasto', 'ingreso')
                   AND CAST(strftime('%Y', creada_en) AS INTEGER) = ?
-                GROUP BY ano, mes ORDER BY mes ASC
+                GROUP BY ano, mes
             """, (user_id, ano)).fetchall()
         else:
             rows = conn.execute("""
@@ -328,7 +404,8 @@ def obtener_resumen_por_mes(
                        SUM(CASE WHEN tipo = 'ingreso' THEN monto ELSE 0 END) AS ingresos
                 FROM transacciones
                 WHERE user_id = ? AND tipo IN ('gasto', 'ingreso')
-                GROUP BY ano, mes ORDER BY ano DESC, mes DESC LIMIT ?
+                GROUP BY ano, mes
+                ORDER BY ano DESC, mes DESC LIMIT ?
             """, (user_id, limite)).fetchall()
 
     result = []
@@ -336,6 +413,8 @@ def obtener_resumen_por_mes(
         d = dict(r)
         d["balance"] = (d["ingresos"] or 0) - (d["gastos"] or 0)
         result.append(d)
+    # Orden alfabético por período Año-Mes (p. ej. 2024-01 antes que 2025-03)
+    result.sort(key=lambda d: (d["ano"], d["mes"]))
     return result
 
 
@@ -497,3 +576,134 @@ def eliminar_registro(user_id: int, transaccion_id: int) -> tuple[bool, str]:
             return True, f"Transferencia de ${monto:,.2f} eliminada correctamente."
 
     return False, "Error al eliminar."
+
+
+def agregar_presupuesto_registro(
+    user_id: int,
+    tipo: str,
+    monto: float,
+    categoria: str = "sin_categoria",
+    es_anual: bool = False,
+) -> tuple[bool, str]:
+    """Registra un gasto o ingreso en el presupuesto único del usuario (tabla independiente).
+
+    Si es gasto anual, `monto` es el total del año; en totales se usa monto/12 como carga mensual.
+    """
+    tipo = tipo.lower().strip()
+    if tipo not in ("gasto", "ingreso"):
+        return False, "Tipo interno inválido."
+    if monto <= 0:
+        return False, "El monto debe ser mayor a 0."
+    if tipo == "ingreso":
+        es_anual = False
+    cat = ((categoria or "sin_categoria").strip() or "sin_categoria").lower()
+    anual_flag = 1 if es_anual else 0
+
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO presupuesto_movimientos
+               (user_id, tipo, monto, categoria, es_anual)
+               VALUES (?, ?, ?, ?, ?)""",
+            (user_id, tipo, monto, cat, anual_flag),
+        )
+        reg_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    etiqueta = "Gasto" if tipo == "gasto" else "Ingreso"
+    if tipo == "gasto" and es_anual:
+        mensual = monto / 12.0
+        return True, (
+            f"{etiqueta} de presupuesto #{reg_id} (anual): ${monto:,.2f}/año "
+            f"→ ${mensual:,.2f}/mes en totales [{cat}]."
+        )
+    return True, f"{etiqueta} de presupuesto #{reg_id}: ${monto:,.2f} [{cat}]."
+
+
+def obtener_presupuesto_registro(user_id: int, registro_id: int) -> dict | None:
+    """Obtiene un movimiento de presupuesto por ID si pertenece al usuario."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM presupuesto_movimientos WHERE id = ? AND user_id = ?",
+            (registro_id, user_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def editar_presupuesto_registro(
+    user_id: int,
+    registro_id: int,
+    monto: float | None = None,
+    categoria: str | None = None,
+) -> tuple[bool, str]:
+    """Edita monto y/o categoría de un registro de presupuesto."""
+    reg = obtener_presupuesto_registro(user_id, registro_id)
+    if not reg:
+        return False, "No se encontró el registro o no te pertenece."
+    if monto is None and categoria is None:
+        return False, "Debes cambiar al menos monto o categoría."
+    if monto is not None and monto <= 0:
+        return False, "El monto debe ser mayor a 0."
+
+    cat = None
+    if categoria is not None:
+        cat = (categoria.strip() or "sin_categoria").lower()
+
+    with get_connection() as conn:
+        if monto is not None:
+            conn.execute(
+                "UPDATE presupuesto_movimientos SET monto = ? WHERE id = ? AND user_id = ?",
+                (monto, registro_id, user_id),
+            )
+        if cat is not None:
+            conn.execute(
+                "UPDATE presupuesto_movimientos SET categoria = ? WHERE id = ? AND user_id = ?",
+                (cat, registro_id, user_id),
+            )
+
+    es_anual = bool(reg.get("es_anual", 0))
+    cambios = []
+    if monto is not None:
+        if es_anual and reg["tipo"] == "gasto":
+            cambios.append(f"monto anual ${monto:,.2f} (${monto / 12.0:,.2f}/mes en totales)")
+        else:
+            cambios.append(f"monto ${monto:,.2f}")
+    if cat is not None:
+        cambios.append(f"categoría '{cat}'")
+    return True, f"Registro de presupuesto #{registro_id} actualizado: {', '.join(cambios)}."
+
+
+def listar_presupuesto(user_id: int) -> list[dict]:
+    """Lista todos los movimientos de presupuesto del usuario."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT id, tipo, monto, categoria, COALESCE(es_anual, 0) AS es_anual, creada_en
+               FROM presupuesto_movimientos
+               WHERE user_id = ?
+               ORDER BY categoria COLLATE NOCASE ASC, tipo DESC, id ASC""",
+            (user_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def totales_presupuesto(user_id: int) -> dict:
+    """Totales de gastos e ingresos planificados del presupuesto del usuario.
+
+    Los gastos marcados como anuales cuentan como monto/12 en el total de gastos mensual.
+    """
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT
+                   COALESCE(SUM(CASE WHEN tipo = 'gasto' THEN
+                       CASE WHEN COALESCE(es_anual, 0) = 1 THEN monto / 12.0 ELSE monto END
+                   ELSE 0 END), 0) AS total_gasto,
+                   COALESCE(SUM(CASE WHEN tipo = 'ingreso' THEN monto ELSE 0 END), 0) AS total_ingreso
+               FROM presupuesto_movimientos
+               WHERE user_id = ?""",
+            (user_id,),
+        ).fetchone()
+    g = row["total_gasto"] if row else 0.0
+    i = row["total_ingreso"] if row else 0.0
+    return {
+        "total_gasto": g,
+        "total_ingreso": i,
+        "balance": i - g,
+    }
