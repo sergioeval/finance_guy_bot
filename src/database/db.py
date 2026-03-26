@@ -188,6 +188,16 @@ def obtener_cuenta_por_nombre(user_id: int, nombre: str) -> dict | None:
     return dict(row) if row else None
 
 
+def obtener_cuenta_por_id(user_id: int, cuenta_id: int) -> dict | None:
+    """Obtiene una cuenta por id si pertenece al usuario."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT id, nombre, tipo, saldo FROM cuentas WHERE user_id = ? AND id = ?",
+            (user_id, cuenta_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def registrar_gasto(user_id: int, nombre_cuenta: str, monto: float, categoria: str = "sin_categoria") -> tuple[bool, str]:
     """Registra un gasto en la cuenta especificada."""
     cuenta = obtener_cuenta_por_nombre(user_id, nombre_cuenta)

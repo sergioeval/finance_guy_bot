@@ -1,5 +1,5 @@
 """Handlers del bot y ConversationHandler."""
-from telegram.ext import CommandHandler, ConversationHandler, MessageHandler
+from telegram.ext import CallbackQueryHandler, CommandHandler, ConversationHandler, MessageHandler
 
 from src.config import (
     CREAR_CUENTA_NOMBRE,
@@ -58,16 +58,31 @@ conv_handler = ConversationHandler(
     states={
         CREAR_CUENTA_NOMBRE: [MessageHandler(TEXT, cuentas.crear_cuenta_nombre)],
         CREAR_CUENTA_TIPO: [MessageHandler(TEXT, cuentas.crear_cuenta_tipo)],
-        GASTO_CUENTA: [MessageHandler(TEXT, movimientos.gasto_cuenta)],
+        GASTO_CUENTA: [
+            CallbackQueryHandler(movimientos.gasto_cuenta_callback, pattern=r"^gc:\d+$"),
+            MessageHandler(TEXT, movimientos.gasto_cuenta),
+        ],
         GASTO_MONTO: [MessageHandler(TEXT, movimientos.gasto_monto)],
         GASTO_CATEGORIA: [MessageHandler(TEXT, movimientos.gasto_categoria)],
-        INGRESO_CUENTA: [MessageHandler(TEXT, movimientos.ingreso_cuenta)],
+        INGRESO_CUENTA: [
+            CallbackQueryHandler(movimientos.ingreso_cuenta_callback, pattern=r"^ic:\d+$"),
+            MessageHandler(TEXT, movimientos.ingreso_cuenta),
+        ],
         INGRESO_MONTO: [MessageHandler(TEXT, movimientos.ingreso_monto)],
         INGRESO_CATEGORIA: [MessageHandler(TEXT, movimientos.ingreso_categoria)],
-        TRANSFERENCIA_ORIGEN: [MessageHandler(TEXT, movimientos.transferencia_origen)],
-        TRANSFERENCIA_DESTINO: [MessageHandler(TEXT, movimientos.transferencia_destino)],
+        TRANSFERENCIA_ORIGEN: [
+            CallbackQueryHandler(movimientos.transferencia_origen_callback, pattern=r"^tro:\d+$"),
+            MessageHandler(TEXT, movimientos.transferencia_origen),
+        ],
+        TRANSFERENCIA_DESTINO: [
+            CallbackQueryHandler(movimientos.transferencia_destino_callback, pattern=r"^trd:\d+$"),
+            MessageHandler(TEXT, movimientos.transferencia_destino),
+        ],
         TRANSFERENCIA_MONTO: [MessageHandler(TEXT, movimientos.transferencia_monto)],
-        REGISTROS_CUENTA: [MessageHandler(TEXT, historial.registros_cuenta)],
+        REGISTROS_CUENTA: [
+            CallbackQueryHandler(historial.registros_cuenta_callback, pattern=r"^reg:\d+$"),
+            MessageHandler(TEXT, historial.registros_cuenta),
+        ],
         EDITAR_ID: [MessageHandler(TEXT, historial.editar_id)],
         EDITAR_MONTO: [MessageHandler(TEXT, historial.editar_monto)],
         EDITAR_CATEGORIA: [MessageHandler(TEXT, historial.editar_categoria)],
@@ -76,7 +91,10 @@ conv_handler = ConversationHandler(
         RESUMEN_CAT_ANO: [MessageHandler(TEXT, resumenes.resumen_cat_ano)],
         RESUMEN_MES_ANO: [MessageHandler(TEXT, resumenes.resumen_mes_ano)],
         RESUMEN_MES_MES: [MessageHandler(TEXT, resumenes.resumen_mes_mes)],
-        AJUSTAR_CUENTA: [MessageHandler(TEXT, movimientos.ajustar_cuenta)],
+        AJUSTAR_CUENTA: [
+            CallbackQueryHandler(movimientos.ajustar_cuenta_callback, pattern=r"^ac:\d+$"),
+            MessageHandler(TEXT, movimientos.ajustar_cuenta),
+        ],
         AJUSTAR_MONTO: [MessageHandler(TEXT, movimientos.ajustar_monto)],
         GASTO_PRESUPUESTO_MONTO: [MessageHandler(TEXT, presupuesto.gasto_presupuesto_monto)],
         GASTO_PRESUPUESTO_ANUAL: [MessageHandler(TEXT, presupuesto.gasto_presupuesto_anual)],

@@ -1,4 +1,6 @@
 """Flujos registros, editar, eliminar."""
+import re
+
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -10,25 +12,42 @@ from src.config import (
     ELIMINAR_ID,
     END,
 )
-from src.database import listar_registros, editar_registro, eliminar_registro
+from src.database import (
+    listar_cuentas,
+    listar_registros,
+    obtener_cuenta_por_id,
+    editar_registro,
+    eliminar_registro,
+)
+from src.handlers.cuenta_inline import keyboard_cuentas
 from src.utils import is_null, parse_cantidad, formato_tipo
+
+_REGISTROS_CUENTA_CB = re.compile(r"^reg:(\d+)$")
 
 
 async def registros_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("¿Qué cuenta?")
+    user_id = update.effective_user.id
+    cuentas = listar_cuentas(user_id)
+    if not cuentas:
+        await update.message.reply_text(
+            "No tienes cuentas. Crea una con /crear_cuenta y vuelve a usar /registros."
+        )
+        return END
+    await update.message.reply_text(
+        "Elige la cuenta (o escribe el nombre):",
+        reply_markup=keyboard_cuentas(cuentas, "reg"),
+    )
     return REGISTROS_CUENTA
 
 
-async def registros_cuenta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    user_id = update.effective_user.id
-    nombre_cuenta = update.message.text.strip().lower()
+async def _enviar_registros_texto(message, user_id: int, nombre_cuenta: str) -> None:
     registros, nombre = listar_registros(user_id, nombre_cuenta)
     if registros is None:
-        await update.message.reply_text(nombre)
-        return END
+        await message.reply_text(nombre)
+        return
     if not registros:
-        await update.message.reply_text(f"No hay registros en la cuenta '{nombre}'.")
-        return END
+        await message.reply_text(f"No hay registros en la cuenta '{nombre}'.")
+        return
     LIMITE = 25
     mostrar = registros[:LIMITE]
     lineas = [f"📜 Registros de {nombre}:\n"]
@@ -43,7 +62,31 @@ async def registros_cuenta(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if len(registros) > LIMITE:
         lineas.append(f"\n... y {len(registros) - LIMITE} más.")
     lineas.append("Usa /editar o /eliminar para modificar o borrar.")
-    await update.message.reply_text("\n".join(lineas))
+    await message.reply_text("\n".join(lineas))
+
+
+async def registros_cuenta_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    m = _REGISTROS_CUENTA_CB.match(query.data or "")
+    if not m:
+        await query.answer()
+        return REGISTROS_CUENTA
+    cuenta_id = int(m.group(1))
+    user_id = update.effective_user.id
+    cuenta = obtener_cuenta_por_id(user_id, cuenta_id)
+    if not cuenta:
+        await query.answer("Esa cuenta ya no existe. Usa /registros de nuevo.", show_alert=True)
+        return REGISTROS_CUENTA
+    await query.answer()
+    await query.edit_message_text(f"Cuenta: {cuenta['nombre']}")
+    await _enviar_registros_texto(query.message, user_id, cuenta["nombre"].strip().lower())
+    return END
+
+
+async def registros_cuenta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_id = update.effective_user.id
+    nombre_cuenta = update.message.text.strip().lower()
+    await _enviar_registros_texto(update.message, user_id, nombre_cuenta)
     return END
 
 

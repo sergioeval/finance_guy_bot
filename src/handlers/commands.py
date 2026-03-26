@@ -24,16 +24,16 @@ Los comandos piden cada parámetro <b>paso a paso</b>. Para parámetros opcional
 /cuentas — Lista todas tus cuentas
 
 <b>Movimientos</b>
-/gasto — Te pedirá: cuenta, monto, categoría (null = sin_categoria)
+/gasto — Elige cuenta con los botones (o escribe el nombre), luego monto y categoría (null = sin_categoria)
 
-/ingreso — Te pedirá: cuenta, monto, categoría (null = sin_categoria)
+/ingreso — Elige cuenta con los botones (o escribe el nombre), luego monto y categoría (null = sin_categoria)
 
-/transferencia — Te pedirá: cuenta origen, cuenta destino, monto
+/transferencia — Elige origen y destino con botones (o nombre), luego monto (mínimo 2 cuentas)
 
-/ajustar — Te pedirá: cuenta, saldo deseado (deja el saldo igual a ese monto con registro [ajuste])
+/ajustar — Elige cuenta con botones (o nombre), luego saldo deseado (registro [ajuste])
 
 <b>Historial</b>
-/registros — Te pedirá: nombre de cuenta
+/registros — Elige cuenta con botones (o escribe el nombre)
 
 /editar — Te pedirá: ID, nuevo monto (null = no cambiar), categoría (null = no cambiar)
 

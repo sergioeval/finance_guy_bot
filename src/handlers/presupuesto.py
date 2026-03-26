@@ -23,18 +23,13 @@ from src.utils import is_null, parse_cantidad
 
 
 def _formatear_linea_presupuesto(r: dict) -> str:
-    tipo_emoji = "📤" if r["tipo"] == "gasto" else "📥"
-    tipo_txt = "Gasto" if r["tipo"] == "gasto" else "Ingreso"
     es_anual = bool(r.get("es_anual", 0))
     if r["tipo"] == "gasto" and es_anual:
         mensual = r["monto"] / 12.0
         monto_str = f"${r['monto']:,.2f}/año → ${mensual:,.2f}/mes"
     else:
         monto_str = f"${r['monto']:,.2f}"
-    return (
-        f"#{r['id']} {tipo_emoji} {tipo_txt} | [{r.get('categoria', 'sin_categoria')}] "
-        f"| {monto_str}"
-    )
+    return f"#{r['id']} | [{r.get('categoria', 'sin_categoria')}] | {monto_str}"
 
 
 def _parse_gasto_anual(text: str) -> bool | None:
