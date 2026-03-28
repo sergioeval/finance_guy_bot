@@ -8,7 +8,7 @@ from telegram import BotCommand, Update
 from telegram.ext import Application, CommandHandler
 
 from src.database import init_db, obtener_ids_usuarios_con_cuentas
-from src.handlers import commands, conv_handler, presupuesto
+from src.handlers import categorias, commands, conv_handler, presupuesto
 
 load_dotenv()
 
@@ -31,6 +31,9 @@ async def post_init(application: Application) -> None:
         BotCommand("cancel", "Cancelar comando actual"),
         BotCommand("crear_cuenta", "Crear cuenta"),
         BotCommand("cuentas", "Ver cuentas"),
+        BotCommand("mis_categorias", "Ver tus categorías"),
+        BotCommand("agregar_categoria", "Nueva categoría (gasto/ingreso/ambos)"),
+        BotCommand("editar_mi_categoria", "Renombrar una categoría"),
         BotCommand("gasto", "Registrar gasto"),
         BotCommand("ingreso", "Registrar ingreso"),
         BotCommand("transferencia", "Transferir"),
@@ -71,6 +74,7 @@ def main() -> None:
     app.add_handler(CommandHandler("cuentas", commands.cmd_cuentas))
     app.add_handler(CommandHandler("resumen", commands.cmd_resumen))
     app.add_handler(CommandHandler("resumen_presupuesto", presupuesto.cmd_resumen_presupuesto))
+    app.add_handler(CommandHandler("mis_categorias", categorias.cmd_mis_categorias))
     app.add_handler(conv_handler)
 
     print("Bot iniciado. Presiona Ctrl+C para detener.")

@@ -22,6 +22,12 @@ from .db import (
     editar_presupuesto_registro,
     listar_presupuesto,
     totales_presupuesto,
+    listar_categorias_usuario,
+    listar_categorias_para_movimiento,
+    categoria_permitida_para_movimiento,
+    obtener_categoria_usuario_por_id,
+    agregar_categoria_usuario,
+    renombrar_categoria_usuario,
 )
 
 __all__ = [
@@ -47,4 +53,10 @@ __all__ = [
     "editar_presupuesto_registro",
     "listar_presupuesto",
     "totales_presupuesto",
+    "listar_categorias_usuario",
+    "listar_categorias_para_movimiento",
+    "categoria_permitida_para_movimiento",
+    "obtener_categoria_usuario_por_id",
+    "agregar_categoria_usuario",
+    "renombrar_categoria_usuario",
 ]

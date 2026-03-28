@@ -32,9 +32,13 @@ from src.config import (
     EDITAR_PRESUPUESTO_ID,
     EDITAR_PRESUPUESTO_MONTO,
     EDITAR_PRESUPUESTO_CATEGORIA,
+    CAT_AGREGAR_NOMBRE,
+    CAT_AGREGAR_AMBITO,
+    CAT_EDITAR_ID,
+    CAT_EDITAR_NOMBRE,
     TEXT,
 )
-from src.handlers import commands, cuentas, movimientos, historial, resumenes, presupuesto
+from src.handlers import commands, cuentas, movimientos, historial, resumenes, presupuesto, categorias
 
 conv_handler = ConversationHandler(
     entry_points=[
@@ -54,6 +58,8 @@ conv_handler = ConversationHandler(
             "editar_registro_presupuesto",
             presupuesto.editar_registro_presupuesto_start,
         ),
+        CommandHandler("agregar_categoria", categorias.agregar_categoria_start),
+        CommandHandler("editar_mi_categoria", categorias.editar_mi_categoria_start),
     ],
     states={
         CREAR_CUENTA_NOMBRE: [MessageHandler(TEXT, cuentas.crear_cuenta_nombre)],
@@ -63,13 +69,19 @@ conv_handler = ConversationHandler(
             MessageHandler(TEXT, movimientos.gasto_cuenta),
         ],
         GASTO_MONTO: [MessageHandler(TEXT, movimientos.gasto_monto)],
-        GASTO_CATEGORIA: [MessageHandler(TEXT, movimientos.gasto_categoria)],
+        GASTO_CATEGORIA: [
+            CallbackQueryHandler(movimientos.gasto_categoria_callback, pattern=r"^cg:\d+$"),
+            MessageHandler(TEXT, movimientos.gasto_categoria),
+        ],
         INGRESO_CUENTA: [
             CallbackQueryHandler(movimientos.ingreso_cuenta_callback, pattern=r"^ic:\d+$"),
             MessageHandler(TEXT, movimientos.ingreso_cuenta),
         ],
         INGRESO_MONTO: [MessageHandler(TEXT, movimientos.ingreso_monto)],
-        INGRESO_CATEGORIA: [MessageHandler(TEXT, movimientos.ingreso_categoria)],
+        INGRESO_CATEGORIA: [
+            CallbackQueryHandler(movimientos.ingreso_categoria_callback, pattern=r"^ci:\d+$"),
+            MessageHandler(TEXT, movimientos.ingreso_categoria),
+        ],
         TRANSFERENCIA_ORIGEN: [
             CallbackQueryHandler(movimientos.transferencia_origen_callback, pattern=r"^tro:\d+$"),
             MessageHandler(TEXT, movimientos.transferencia_origen),
@@ -99,17 +111,27 @@ conv_handler = ConversationHandler(
         GASTO_PRESUPUESTO_MONTO: [MessageHandler(TEXT, presupuesto.gasto_presupuesto_monto)],
         GASTO_PRESUPUESTO_ANUAL: [MessageHandler(TEXT, presupuesto.gasto_presupuesto_anual)],
         GASTO_PRESUPUESTO_CATEGORIA: [
-            MessageHandler(TEXT, presupuesto.gasto_presupuesto_categoria)
+            CallbackQueryHandler(
+                presupuesto.gasto_presupuesto_categoria_callback, pattern=r"^pg:\d+$"
+            ),
+            MessageHandler(TEXT, presupuesto.gasto_presupuesto_categoria),
         ],
         INGRESO_PRESUPUESTO_MONTO: [MessageHandler(TEXT, presupuesto.ingreso_presupuesto_monto)],
         INGRESO_PRESUPUESTO_CATEGORIA: [
-            MessageHandler(TEXT, presupuesto.ingreso_presupuesto_categoria)
+            CallbackQueryHandler(
+                presupuesto.ingreso_presupuesto_categoria_callback, pattern=r"^pi:\d+$"
+            ),
+            MessageHandler(TEXT, presupuesto.ingreso_presupuesto_categoria),
         ],
         EDITAR_PRESUPUESTO_ID: [MessageHandler(TEXT, presupuesto.editar_presupuesto_id)],
         EDITAR_PRESUPUESTO_MONTO: [MessageHandler(TEXT, presupuesto.editar_presupuesto_monto)],
         EDITAR_PRESUPUESTO_CATEGORIA: [
             MessageHandler(TEXT, presupuesto.editar_presupuesto_categoria)
         ],
+        CAT_AGREGAR_NOMBRE: [MessageHandler(TEXT, categorias.agregar_categoria_nombre)],
+        CAT_AGREGAR_AMBITO: [MessageHandler(TEXT, categorias.agregar_categoria_ambito)],
+        CAT_EDITAR_ID: [MessageHandler(TEXT, categorias.editar_mi_categoria_id)],
+        CAT_EDITAR_NOMBRE: [MessageHandler(TEXT, categorias.editar_mi_categoria_nombre)],
     },
     fallbacks=[
         CommandHandler("cancel", commands.cmd_cancel),
@@ -129,5 +151,7 @@ conv_handler = ConversationHandler(
             "editar_registro_presupuesto",
             presupuesto.editar_registro_presupuesto_start,
         ),
+        CommandHandler("agregar_categoria", categorias.agregar_categoria_start),
+        CommandHandler("editar_mi_categoria", categorias.editar_mi_categoria_start),
     ],
 )

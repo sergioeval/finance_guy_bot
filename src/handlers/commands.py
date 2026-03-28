@@ -23,10 +23,17 @@ Los comandos piden cada parámetro <b>paso a paso</b>. Para parámetros opcional
 
 /cuentas — Lista todas tus cuentas
 
-<b>Movimientos</b>
-/gasto — Elige cuenta con los botones (o escribe el nombre), luego monto y categoría (null = sin_categoria)
+<b>Categorías</b> (obligatorias para gastos e ingresos nuevos; los movimientos viejos no se borran)
+/mis_categorias — Lista tus categorías con #id
 
-/ingreso — Elige cuenta con los botones (o escribe el nombre), luego monto y categoría (null = sin_categoria)
+/agregar_categoria — Nombre y ámbito: gasto, ingreso o ambos
+
+/editar_mi_categoria — Renombra por #id (actualiza también movimientos con ese nombre)
+
+<b>Movimientos</b>
+/gasto — Cuenta, monto, luego categoría (botones o nombre exacto de /mis_categorias)
+
+/ingreso — Igual que gasto, con categorías de ingreso o «ambos»
 
 /transferencia — Elige origen y destino con botones (o nombre), luego monto (mínimo 2 cuentas)
 
@@ -35,7 +42,7 @@ Los comandos piden cada parámetro <b>paso a paso</b>. Para parámetros opcional
 <b>Historial</b>
 /registros — Elige cuenta con botones (o escribe el nombre)
 
-/editar — Te pedirá: ID, nuevo monto (null = no cambiar), categoría (null = no cambiar)
+/editar — ID, monto (null = no cambiar), categoría (null = no cambiar; si cambias, debe estar en /mis_categorias)
 
 /eliminar — Te pedirá: ID del registro
 
@@ -47,13 +54,13 @@ Los comandos piden cada parámetro <b>paso a paso</b>. Para parámetros opcional
 /resumen_mes — Te pedirá: año (null = últimos 12 meses), mes (null = todos)
 
 <b>Presupuesto</b> (una sola lista por usuario; tabla aparte; no afecta cuentas ni transacciones)
-/gasto_presupuesto — Monto, ¿anual? (si = total año, se divide entre 12 en totales; null = mensual), categoría
+/gasto_presupuesto — Monto, ¿anual?, categoría (solo de /mis_categorias para gastos)
 
-/ingreso_presupuesto — Igual, como ingreso planificado
+/ingreso_presupuesto — Monto y categoría (solo de /mis_categorias para ingresos)
 
 /resumen_presupuesto — Lista #id, totales y balance (sin preguntas)
 
-/editar_registro_presupuesto — ID (ver /resumen_presupuesto), monto y/o categoría (null = no cambiar)
+/editar_registro_presupuesto — ID, monto y/o categoría válida en /mis_categorias (null = no cambiar)
 
 <b>Otros</b>
 /cancel — Cancela el comando actual

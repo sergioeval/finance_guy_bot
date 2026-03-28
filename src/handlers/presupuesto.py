@@ -1,4 +1,6 @@
 """Presupuesto único por usuario (tabla presupuesto_movimientos; sin periodo año/mes)."""
+import re
+
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -15,11 +17,18 @@ from src.config import (
 )
 from src.database import (
     agregar_presupuesto_registro,
+    categoria_permitida_para_movimiento,
     editar_presupuesto_registro,
+    listar_categorias_para_movimiento,
     listar_presupuesto,
+    obtener_categoria_usuario_por_id,
     totales_presupuesto,
 )
+from src.handlers.categoria_inline import keyboard_categorias, texto_elegir_categoria
 from src.utils import is_null, parse_cantidad
+
+_PRES_GASTO_CAT_CB = re.compile(r"^pg:(\d+)$")
+_PRES_INGRESO_CAT_CB = re.compile(r"^pi:(\d+)$")
 
 
 def _formatear_linea_presupuesto(r: dict) -> str:
@@ -69,18 +78,54 @@ async def gasto_presupuesto_anual(update: Update, context: ContextTypes.DEFAULT_
         )
         return GASTO_PRESUPUESTO_ANUAL
     context.user_data["pres_gasto_es_anual"] = parsed
-    await update.message.reply_text("¿Categoría? (o null para sin_categoria)")
+    user_id = update.effective_user.id
+    cats = listar_categorias_para_movimiento(user_id, "gasto")
+    if not cats:
+        await update.message.reply_text(
+            "No tienes categorías para gastos. Usa /agregar_categoria (gasto o ambos) y vuelve a /gasto_presupuesto."
+        )
+        return END
+    await update.message.reply_text(
+        texto_elegir_categoria(cats),
+        reply_markup=keyboard_categorias(cats, "pg"),
+    )
     return GASTO_PRESUPUESTO_CATEGORIA
+
+
+async def gasto_presupuesto_categoria_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    m = _PRES_GASTO_CAT_CB.match(query.data or "")
+    if not m:
+        await query.answer()
+        return GASTO_PRESUPUESTO_CATEGORIA
+    cat_id = int(m.group(1))
+    user_id = update.effective_user.id
+    row = obtener_categoria_usuario_por_id(user_id, cat_id)
+    if not row or not categoria_permitida_para_movimiento(user_id, row["nombre"], "gasto"):
+        await query.answer("Categoría no válida.", show_alert=True)
+        return GASTO_PRESUPUESTO_CATEGORIA
+    await query.answer()
+    monto = context.user_data["pres_gasto_monto"]
+    es_anual = bool(context.user_data.get("pres_gasto_es_anual", False))
+    _, mensaje = agregar_presupuesto_registro(
+        user_id, "gasto", monto, row["nombre"], es_anual=es_anual
+    )
+    await query.edit_message_text(mensaje)
+    return END
 
 
 async def gasto_presupuesto_categoria(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     cat = update.message.text.strip().lower()
-    categoria = "sin_categoria" if is_null(cat) else cat
     user_id = update.effective_user.id
+    if not categoria_permitida_para_movimiento(user_id, cat, "gasto"):
+        await update.message.reply_text(
+            "Categoría no reconocida. Usa /mis_categorias o los botones."
+        )
+        return GASTO_PRESUPUESTO_CATEGORIA
     monto = context.user_data["pres_gasto_monto"]
     es_anual = bool(context.user_data.get("pres_gasto_es_anual", False))
     _, mensaje = agregar_presupuesto_registro(
-        user_id, "gasto", monto, categoria, es_anual=es_anual
+        user_id, "gasto", monto, cat, es_anual=es_anual
     )
     await update.message.reply_text(mensaje)
     return END
@@ -97,16 +142,49 @@ async def ingreso_presupuesto_monto(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("Monto inválido. Escribe un número mayor a 0.")
         return INGRESO_PRESUPUESTO_MONTO
     context.user_data["pres_ing_monto"] = monto
-    await update.message.reply_text("¿Categoría? (o null para sin_categoria)")
+    user_id = update.effective_user.id
+    cats = listar_categorias_para_movimiento(user_id, "ingreso")
+    if not cats:
+        await update.message.reply_text(
+            "No tienes categorías para ingresos. Usa /agregar_categoria (ingreso o ambos) y vuelve a /ingreso_presupuesto."
+        )
+        return END
+    await update.message.reply_text(
+        texto_elegir_categoria(cats),
+        reply_markup=keyboard_categorias(cats, "pi"),
+    )
     return INGRESO_PRESUPUESTO_CATEGORIA
+
+
+async def ingreso_presupuesto_categoria_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    m = _PRES_INGRESO_CAT_CB.match(query.data or "")
+    if not m:
+        await query.answer()
+        return INGRESO_PRESUPUESTO_CATEGORIA
+    cat_id = int(m.group(1))
+    user_id = update.effective_user.id
+    row = obtener_categoria_usuario_por_id(user_id, cat_id)
+    if not row or not categoria_permitida_para_movimiento(user_id, row["nombre"], "ingreso"):
+        await query.answer("Categoría no válida.", show_alert=True)
+        return INGRESO_PRESUPUESTO_CATEGORIA
+    await query.answer()
+    monto = context.user_data["pres_ing_monto"]
+    _, mensaje = agregar_presupuesto_registro(user_id, "ingreso", monto, row["nombre"])
+    await query.edit_message_text(mensaje)
+    return END
 
 
 async def ingreso_presupuesto_categoria(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     cat = update.message.text.strip().lower()
-    categoria = "sin_categoria" if is_null(cat) else cat
     user_id = update.effective_user.id
+    if not categoria_permitida_para_movimiento(user_id, cat, "ingreso"):
+        await update.message.reply_text(
+            "Categoría no reconocida. Usa /mis_categorias o los botones."
+        )
+        return INGRESO_PRESUPUESTO_CATEGORIA
     monto = context.user_data["pres_ing_monto"]
-    _, mensaje = agregar_presupuesto_registro(user_id, "ingreso", monto, categoria)
+    _, mensaje = agregar_presupuesto_registro(user_id, "ingreso", monto, cat)
     await update.message.reply_text(mensaje)
     return END
 
@@ -144,7 +222,9 @@ async def editar_presupuesto_monto(update: Update, context: ContextTypes.DEFAULT
             context.user_data["pres_edit_monto"] = monto
         else:
             context.user_data["pres_edit_monto"] = None
-    await update.message.reply_text("¿Nueva categoría? (o null para no cambiar)")
+    await update.message.reply_text(
+        "¿Nueva categoría? (o null para no cambiar). Debe ser una de /mis_categorias según el tipo del registro."
+    )
     return EDITAR_PRESUPUESTO_CATEGORIA
 
 

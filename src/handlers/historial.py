@@ -116,7 +116,9 @@ async def editar_monto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             context.user_data["editar_monto"] = monto
         else:
             context.user_data["editar_monto"] = None
-    await update.message.reply_text("¿Nueva categoría? (o null para no cambiar)")
+    await update.message.reply_text(
+        "¿Nueva categoría? (o null para no cambiar). Si cambias categoría, debe existir en /mis_categorias para ese tipo de movimiento."
+    )
     return EDITAR_CATEGORIA
 
 

@@ -63,6 +63,131 @@ def init_db():
             pass
         _ensure_presupuesto_tabla(conn)
         _ensure_presupuesto_es_anual(conn)
+        _ensure_categorias_usuario_tabla(conn)
+
+
+def _ensure_categorias_usuario_tabla(conn: sqlite3.Connection) -> None:
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS categorias_usuario (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            nombre TEXT NOT NULL,
+            ambito TEXT NOT NULL CHECK(ambito IN ('gasto', 'ingreso', 'ambos')),
+            creada_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, nombre)
+        )
+    """)
+
+
+def _normalizar_nombre_categoria(nombre: str) -> str:
+    return (nombre or "").strip().lower()
+
+
+def listar_categorias_usuario(user_id: int) -> list[dict]:
+    """Todas las categorías definidas por el usuario (id, nombre, ambito)."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT id, nombre, ambito FROM categorias_usuario
+               WHERE user_id = ? ORDER BY nombre COLLATE NOCASE ASC""",
+            (user_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def listar_categorias_para_movimiento(user_id: int, movimiento_tipo: str) -> list[dict]:
+    """Categorías aplicables a un gasto o ingreso (incluye ambito 'ambos')."""
+    movimiento_tipo = movimiento_tipo.lower().strip()
+    if movimiento_tipo not in ("gasto", "ingreso"):
+        return []
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT id, nombre, ambito FROM categorias_usuario
+               WHERE user_id = ? AND (ambito = ? OR ambito = 'ambos')
+               ORDER BY nombre COLLATE NOCASE ASC""",
+            (user_id, movimiento_tipo),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def categoria_permitida_para_movimiento(user_id: int, nombre: str, movimiento_tipo: str) -> bool:
+    n = _normalizar_nombre_categoria(nombre)
+    if not n:
+        return False
+    movimiento_tipo = movimiento_tipo.lower().strip()
+    if movimiento_tipo not in ("gasto", "ingreso"):
+        return False
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT 1 FROM categorias_usuario
+               WHERE user_id = ? AND nombre = ?
+                 AND (ambito = 'ambos' OR ambito = ?)""",
+            (user_id, n, movimiento_tipo),
+        ).fetchone()
+    return row is not None
+
+
+def obtener_categoria_usuario_por_id(user_id: int, categoria_id: int) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT id, nombre, ambito FROM categorias_usuario
+               WHERE id = ? AND user_id = ?""",
+            (categoria_id, user_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def agregar_categoria_usuario(user_id: int, nombre: str, ambito: str) -> tuple[bool, str]:
+    n = _normalizar_nombre_categoria(nombre)
+    if not n:
+        return False, "El nombre de la categoría no puede estar vacío."
+    ambito = ambito.lower().strip()
+    if ambito not in ("gasto", "ingreso", "ambos"):
+        return False, "El ámbito debe ser: gasto, ingreso o ambos."
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                """INSERT INTO categorias_usuario (user_id, nombre, ambito)
+                   VALUES (?, ?, ?)""",
+                (user_id, n, ambito),
+            )
+            cid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        return True, f"Categoría '{n}' (#{cid}, {ambito}) creada."
+    except sqlite3.IntegrityError:
+        return False, f"Ya tienes una categoría con el nombre '{n}'."
+
+
+def renombrar_categoria_usuario(user_id: int, categoria_id: int, nuevo_nombre: str) -> tuple[bool, str]:
+    nuevo = _normalizar_nombre_categoria(nuevo_nombre)
+    if not nuevo:
+        return False, "El nuevo nombre no puede estar vacío."
+    actual = obtener_categoria_usuario_por_id(user_id, categoria_id)
+    if not actual:
+        return False, "No se encontró esa categoría o no te pertenece."
+    viejo = actual["nombre"]
+    if viejo == nuevo:
+        return False, "El nombre es el mismo que ya tenías."
+
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                """UPDATE categorias_usuario SET nombre = ?
+                   WHERE id = ? AND user_id = ?""",
+                (nuevo, categoria_id, user_id),
+            )
+            conn.execute(
+                """UPDATE transacciones SET categoria = ?
+                   WHERE user_id = ? AND categoria = ?
+                     AND tipo IN ('gasto', 'ingreso')""",
+                (nuevo, user_id, viejo),
+            )
+            conn.execute(
+                """UPDATE presupuesto_movimientos SET categoria = ?
+                   WHERE user_id = ? AND categoria = ?""",
+                (nuevo, user_id, viejo),
+            )
+        return True, f"Categoría #{categoria_id} renombrada: '{viejo}' → '{nuevo}' (movimientos vinculados actualizados)."
+    except sqlite3.IntegrityError:
+        return False, f"Ya existe otra categoría con el nombre '{nuevo}'."
 
 
 def _ensure_presupuesto_es_anual(conn: sqlite3.Connection) -> None:
@@ -198,7 +323,7 @@ def obtener_cuenta_por_id(user_id: int, cuenta_id: int) -> dict | None:
     return dict(row) if row else None
 
 
-def registrar_gasto(user_id: int, nombre_cuenta: str, monto: float, categoria: str = "sin_categoria") -> tuple[bool, str]:
+def registrar_gasto(user_id: int, nombre_cuenta: str, monto: float, categoria: str) -> tuple[bool, str]:
     """Registra un gasto en la cuenta especificada."""
     cuenta = obtener_cuenta_por_nombre(user_id, nombre_cuenta)
     if not cuenta:
@@ -207,7 +332,13 @@ def registrar_gasto(user_id: int, nombre_cuenta: str, monto: float, categoria: s
     if monto <= 0:
         return False, "El monto debe ser mayor a 0."
 
-    cat = ((categoria or "sin_categoria").strip() or "sin_categoria").lower()
+    cat = _normalizar_nombre_categoria(categoria)
+    if not cat:
+        return False, "Debes elegir una categoría de tu lista (/mis_categorias)."
+    if not categoria_permitida_para_movimiento(user_id, cat, "gasto"):
+        return False, (
+            "Esa categoría no es válida para gastos. Revisa /mis_categorias o usa /agregar_categoria."
+        )
 
     with get_connection() as conn:
         if cuenta["tipo"] == "debito":
@@ -224,7 +355,7 @@ def registrar_gasto(user_id: int, nombre_cuenta: str, monto: float, categoria: s
     return True, f"Gasto de ${monto:,.2f} registrado en '{cuenta['nombre']}' [{cat}]."
 
 
-def registrar_ingreso(user_id: int, nombre_cuenta: str, monto: float, categoria: str = "sin_categoria") -> tuple[bool, str]:
+def registrar_ingreso(user_id: int, nombre_cuenta: str, monto: float, categoria: str) -> tuple[bool, str]:
     """Registra un ingreso en la cuenta especificada."""
     cuenta = obtener_cuenta_por_nombre(user_id, nombre_cuenta)
     if not cuenta:
@@ -233,7 +364,13 @@ def registrar_ingreso(user_id: int, nombre_cuenta: str, monto: float, categoria:
     if monto <= 0:
         return False, "El monto debe ser mayor a 0."
 
-    cat = ((categoria or "sin_categoria").strip() or "sin_categoria").lower()
+    cat = _normalizar_nombre_categoria(categoria)
+    if not cat:
+        return False, "Debes elegir una categoría de tu lista (/mis_categorias)."
+    if not categoria_permitida_para_movimiento(user_id, cat, "ingreso"):
+        return False, (
+            "Esa categoría no es válida para ingresos. Revisa /mis_categorias o usa /agregar_categoria."
+        )
     nuevo_saldo = cuenta["saldo"] + monto
 
     with get_connection() as conn:
@@ -486,7 +623,13 @@ def editar_registro(
 
     cat = None
     if categoria is not None:
-        cat = (categoria.strip() or "sin_categoria").lower()
+        cat = _normalizar_nombre_categoria(categoria)
+        if not cat:
+            return False, "La categoría no puede estar vacía."
+        if not categoria_permitida_para_movimiento(user_id, cat, tipo):
+            return False, (
+                f"Esa categoría no es válida para {tipo}s. Revisa /mis_categorias o usa /agregar_categoria."
+            )
 
     with get_connection() as conn:
         cuenta = conn.execute(
@@ -592,7 +735,7 @@ def agregar_presupuesto_registro(
     user_id: int,
     tipo: str,
     monto: float,
-    categoria: str = "sin_categoria",
+    categoria: str,
     es_anual: bool = False,
 ) -> tuple[bool, str]:
     """Registra un gasto o ingreso en el presupuesto único del usuario (tabla independiente).
@@ -606,7 +749,14 @@ def agregar_presupuesto_registro(
         return False, "El monto debe ser mayor a 0."
     if tipo == "ingreso":
         es_anual = False
-    cat = ((categoria or "sin_categoria").strip() or "sin_categoria").lower()
+    cat = _normalizar_nombre_categoria(categoria)
+    if not cat:
+        return False, "Debes indicar una categoría de tu lista (/mis_categorias)."
+    if not categoria_permitida_para_movimiento(user_id, cat, tipo):
+        return False, (
+            f"Esa categoría no es válida para {tipo}s de presupuesto. "
+            "Revisa /mis_categorias o usa /agregar_categoria."
+        )
     anual_flag = 1 if es_anual else 0
 
     with get_connection() as conn:
@@ -655,7 +805,15 @@ def editar_presupuesto_registro(
 
     cat = None
     if categoria is not None:
-        cat = (categoria.strip() or "sin_categoria").lower()
+        cat = _normalizar_nombre_categoria(categoria)
+        if not cat:
+            return False, "La categoría no puede estar vacía."
+        reg_tipo = reg["tipo"]
+        if not categoria_permitida_para_movimiento(user_id, cat, reg_tipo):
+            return False, (
+                f"Esa categoría no es válida para {reg_tipo}s de presupuesto. "
+                "Revisa /mis_categorias o usa /agregar_categoria."
+            )
 
     with get_connection() as conn:
         if monto is not None:

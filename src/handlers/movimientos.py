@@ -19,7 +19,10 @@ from src.config import (
     END,
 )
 from src.database import (
+    categoria_permitida_para_movimiento,
+    listar_categorias_para_movimiento,
     listar_cuentas,
+    obtener_categoria_usuario_por_id,
     obtener_cuenta_por_id,
     obtener_cuenta_por_nombre,
     registrar_gasto,
@@ -27,14 +30,17 @@ from src.database import (
     registrar_ajuste_saldo,
     transferir,
 )
+from src.handlers.categoria_inline import keyboard_categorias, texto_elegir_categoria
 from src.handlers.cuenta_inline import keyboard_cuentas
-from src.utils import is_null, parse_cantidad
+from src.utils import parse_cantidad
 
 _GASTO_CUENTA_CB = re.compile(r"^gc:(\d+)$")
 _INGRESO_CUENTA_CB = re.compile(r"^ic:(\d+)$")
 _TRANSF_ORIGEN_CB = re.compile(r"^tro:(\d+)$")
 _TRANSF_DESTINO_CB = re.compile(r"^trd:(\d+)$")
 _AJUSTAR_CUENTA_CB = re.compile(r"^ac:(\d+)$")
+_GASTO_CAT_CB = re.compile(r"^cg:(\d+)$")
+_INGRESO_CAT_CB = re.compile(r"^ci:(\d+)$")
 
 
 async def gasto_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -84,17 +90,52 @@ async def gasto_monto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         await update.message.reply_text("Monto inválido. Escribe un número mayor a 0.")
         return GASTO_MONTO
     context.user_data["gasto_monto"] = monto
-    await update.message.reply_text("¿Categoría? (o null para sin_categoria)")
+    user_id = update.effective_user.id
+    cats = listar_categorias_para_movimiento(user_id, "gasto")
+    if not cats:
+        await update.message.reply_text(
+            "No tienes categorías para gastos. Crea una con /agregar_categoria "
+            "(elige ámbito «gasto» o «ambos») y vuelve a usar /gasto."
+        )
+        return END
+    await update.message.reply_text(
+        texto_elegir_categoria(cats),
+        reply_markup=keyboard_categorias(cats, "cg"),
+    )
     return GASTO_CATEGORIA
+
+
+async def gasto_categoria_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    m = _GASTO_CAT_CB.match(query.data or "")
+    if not m:
+        await query.answer()
+        return GASTO_CATEGORIA
+    cat_id = int(m.group(1))
+    user_id = update.effective_user.id
+    row = obtener_categoria_usuario_por_id(user_id, cat_id)
+    if not row or not categoria_permitida_para_movimiento(user_id, row["nombre"], "gasto"):
+        await query.answer("Categoría no válida. Usa /gasto de nuevo.", show_alert=True)
+        return GASTO_CATEGORIA
+    await query.answer()
+    cuenta = context.user_data["gasto_cuenta"]
+    monto = context.user_data["gasto_monto"]
+    _, mensaje = registrar_gasto(user_id, cuenta, monto, row["nombre"])
+    await query.edit_message_text(mensaje)
+    return END
 
 
 async def gasto_categoria(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     cat = update.message.text.strip().lower()
-    categoria = "sin_categoria" if is_null(cat) else cat
     user_id = update.effective_user.id
+    if not categoria_permitida_para_movimiento(user_id, cat, "gasto"):
+        await update.message.reply_text(
+            "Categoría no reconocida para gastos. Usa un nombre de /mis_categorias o los botones."
+        )
+        return GASTO_CATEGORIA
     cuenta = context.user_data["gasto_cuenta"]
     monto = context.user_data["gasto_monto"]
-    exito, mensaje = registrar_gasto(user_id, cuenta, monto, categoria)
+    _, mensaje = registrar_gasto(user_id, cuenta, monto, cat)
     await update.message.reply_text(mensaje)
     return END
 
@@ -146,17 +187,52 @@ async def ingreso_monto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         await update.message.reply_text("Monto inválido. Escribe un número mayor a 0.")
         return INGRESO_MONTO
     context.user_data["ingreso_monto"] = monto
-    await update.message.reply_text("¿Categoría? (o null para sin_categoria)")
+    user_id = update.effective_user.id
+    cats = listar_categorias_para_movimiento(user_id, "ingreso")
+    if not cats:
+        await update.message.reply_text(
+            "No tienes categorías para ingresos. Crea una con /agregar_categoria "
+            "(ámbito «ingreso» o «ambos») y vuelve a usar /ingreso."
+        )
+        return END
+    await update.message.reply_text(
+        texto_elegir_categoria(cats),
+        reply_markup=keyboard_categorias(cats, "ci"),
+    )
     return INGRESO_CATEGORIA
+
+
+async def ingreso_categoria_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    m = _INGRESO_CAT_CB.match(query.data or "")
+    if not m:
+        await query.answer()
+        return INGRESO_CATEGORIA
+    cat_id = int(m.group(1))
+    user_id = update.effective_user.id
+    row = obtener_categoria_usuario_por_id(user_id, cat_id)
+    if not row or not categoria_permitida_para_movimiento(user_id, row["nombre"], "ingreso"):
+        await query.answer("Categoría no válida. Usa /ingreso de nuevo.", show_alert=True)
+        return INGRESO_CATEGORIA
+    await query.answer()
+    cuenta = context.user_data["ingreso_cuenta"]
+    monto = context.user_data["ingreso_monto"]
+    _, mensaje = registrar_ingreso(user_id, cuenta, monto, row["nombre"])
+    await query.edit_message_text(mensaje)
+    return END
 
 
 async def ingreso_categoria(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     cat = update.message.text.strip().lower()
-    categoria = "sin_categoria" if is_null(cat) else cat
     user_id = update.effective_user.id
+    if not categoria_permitida_para_movimiento(user_id, cat, "ingreso"):
+        await update.message.reply_text(
+            "Categoría no reconocida para ingresos. Usa un nombre de /mis_categorias o los botones."
+        )
+        return INGRESO_CATEGORIA
     cuenta = context.user_data["ingreso_cuenta"]
     monto = context.user_data["ingreso_monto"]
-    exito, mensaje = registrar_ingreso(user_id, cuenta, monto, categoria)
+    _, mensaje = registrar_ingreso(user_id, cuenta, monto, cat)
     await update.message.reply_text(mensaje)
     return END
 
