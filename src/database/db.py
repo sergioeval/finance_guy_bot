@@ -63,6 +63,7 @@ def init_db():
             pass
         _ensure_presupuesto_tabla(conn)
         _ensure_presupuesto_es_anual(conn)
+        _ensure_presupuestos_y_relacion(conn)
         _ensure_categorias_usuario_tabla(conn)
 
 
@@ -260,6 +261,157 @@ def _ensure_presupuesto_tabla(conn: sqlite3.Connection) -> None:
             "INSERT INTO sqlite_sequence (name, seq) VALUES ('presupuesto_movimientos', ?)",
             (mx,),
         )
+
+
+def _ensure_presupuestos_y_relacion(conn: sqlite3.Connection) -> None:
+    """Varios presupuestos por usuario; movimientos enlazados con presupuesto_id."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS presupuestos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            nombre TEXT NOT NULL,
+            creada_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, nombre)
+        )
+    """)
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='presupuesto_movimientos'"
+    ).fetchone()
+    if not row:
+        return
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(presupuesto_movimientos)")}
+    if "presupuesto_id" in cols:
+        return
+    for (uid,) in conn.execute(
+        "SELECT DISTINCT user_id FROM presupuesto_movimientos"
+    ).fetchall():
+        conn.execute(
+            "INSERT OR IGNORE INTO presupuestos (user_id, nombre) VALUES (?, ?)",
+            (uid, "principal"),
+        )
+    conn.execute("ALTER TABLE presupuesto_movimientos ADD COLUMN presupuesto_id INTEGER")
+    for mid, uid in conn.execute(
+        "SELECT id, user_id FROM presupuesto_movimientos"
+    ).fetchall():
+        pr = conn.execute(
+            "SELECT id FROM presupuestos WHERE user_id = ? AND nombre = ?",
+            (uid, "principal"),
+        ).fetchone()
+        if pr:
+            conn.execute(
+                "UPDATE presupuesto_movimientos SET presupuesto_id = ? WHERE id = ?",
+                (pr[0], mid),
+            )
+
+
+def _normalizar_nombre_presupuesto(nombre: str) -> str:
+    return (nombre or "").strip().lower()
+
+
+def obtener_presupuesto_por_nombre(user_id: int, nombre: str) -> dict | None:
+    n = _normalizar_nombre_presupuesto(nombre)
+    if not n:
+        return None
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT id, user_id, nombre FROM presupuestos WHERE user_id = ? AND nombre = ?",
+            (user_id, n),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def obtener_presupuesto_por_id(user_id: int, presupuesto_id: int) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT id, user_id, nombre FROM presupuestos WHERE id = ? AND user_id = ?",
+            (presupuesto_id, user_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def resolver_presupuesto_por_nombre(user_id: int, nombre: str) -> tuple[int | None, str | None]:
+    """Devuelve (presupuesto_id, None) o (None, error). Crea el presupuesto si no existe."""
+    n = _normalizar_nombre_presupuesto(nombre)
+    if not n:
+        return None, "El nombre del presupuesto no puede estar vacío."
+    existing = obtener_presupuesto_por_nombre(user_id, n)
+    if existing:
+        return existing["id"], None
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                "INSERT INTO presupuestos (user_id, nombre) VALUES (?, ?)",
+                (user_id, n),
+            )
+            pid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        return pid, None
+    except sqlite3.IntegrityError:
+        row2 = obtener_presupuesto_por_nombre(user_id, n)
+        if row2:
+            return row2["id"], None
+        return None, "No se pudo crear el presupuesto."
+
+
+def listar_presupuestos(user_id: int) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT p.id, p.nombre,
+               (SELECT COUNT(*) FROM presupuesto_movimientos m
+                WHERE m.presupuesto_id = p.id) AS n_movimientos
+               FROM presupuestos p WHERE p.user_id = ?
+               ORDER BY p.nombre COLLATE NOCASE ASC""",
+            (user_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def clonar_presupuesto(
+    user_id: int, presupuesto_origen_id: int, nuevo_nombre: str
+) -> tuple[bool, str]:
+    """Copia todas las líneas de un presupuesto a uno nuevo con otro nombre."""
+    n = _normalizar_nombre_presupuesto(nuevo_nombre)
+    if not n:
+        return False, "El nombre del presupuesto nuevo no puede estar vacío."
+    orig = obtener_presupuesto_por_id(user_id, presupuesto_origen_id)
+    if not orig:
+        return False, "El presupuesto a copiar no existe o no te pertenece."
+    if orig["nombre"] == n:
+        return False, "El nombre nuevo debe ser distinto al del presupuesto original."
+    if obtener_presupuesto_por_nombre(user_id, n):
+        return False, f"Ya tienes un presupuesto llamado «{n}»."
+
+    with get_connection() as conn:
+        movs = conn.execute(
+            """SELECT tipo, monto, categoria, COALESCE(es_anual, 0) AS es_anual
+               FROM presupuesto_movimientos
+               WHERE user_id = ? AND presupuesto_id = ?""",
+            (user_id, presupuesto_origen_id),
+        ).fetchall()
+        conn.execute(
+            "INSERT INTO presupuestos (user_id, nombre) VALUES (?, ?)",
+            (user_id, n),
+        )
+        nuevo_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        for r in movs:
+            conn.execute(
+                """INSERT INTO presupuesto_movimientos
+                   (user_id, presupuesto_id, tipo, monto, categoria, es_anual)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    user_id,
+                    nuevo_id,
+                    r["tipo"],
+                    r["monto"],
+                    r["categoria"],
+                    int(r["es_anual"]),
+                ),
+            )
+        n_copias = len(movs)
+
+    return True, (
+        f"Presupuesto «{orig['nombre']}» clonado como «{n}» (#{nuevo_id}): "
+        f"{n_copias} línea(s) copiada(s)."
+    )
 
 
 def crear_cuenta(user_id: int, nombre: str, tipo: str) -> tuple[bool, str]:
@@ -733,12 +885,13 @@ def eliminar_registro(user_id: int, transaccion_id: int) -> tuple[bool, str]:
 
 def agregar_presupuesto_registro(
     user_id: int,
+    presupuesto_id: int,
     tipo: str,
     monto: float,
     categoria: str,
     es_anual: bool = False,
 ) -> tuple[bool, str]:
-    """Registra un gasto o ingreso en el presupuesto único del usuario (tabla independiente).
+    """Registra un gasto o ingreso en un presupuesto concreto del usuario.
 
     Si es gasto anual, `monto` es el total del año; en totales se usa monto/12 como carga mensual.
     """
@@ -760,22 +913,30 @@ def agregar_presupuesto_registro(
     anual_flag = 1 if es_anual else 0
 
     with get_connection() as conn:
+        pn = conn.execute(
+            "SELECT nombre FROM presupuestos WHERE id = ? AND user_id = ?",
+            (presupuesto_id, user_id),
+        ).fetchone()
+        if not pn:
+            return False, "Presupuesto no encontrado o no te pertenece."
+        nombre_pres = pn[0]
         conn.execute(
             """INSERT INTO presupuesto_movimientos
-               (user_id, tipo, monto, categoria, es_anual)
-               VALUES (?, ?, ?, ?, ?)""",
-            (user_id, tipo, monto, cat, anual_flag),
+               (user_id, presupuesto_id, tipo, monto, categoria, es_anual)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (user_id, presupuesto_id, tipo, monto, cat, anual_flag),
         )
         reg_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
     etiqueta = "Gasto" if tipo == "gasto" else "Ingreso"
+    sufijo = f" [«{nombre_pres}»]"
     if tipo == "gasto" and es_anual:
         mensual = monto / 12.0
         return True, (
-            f"{etiqueta} de presupuesto #{reg_id} (anual): ${monto:,.2f}/año "
+            f"{etiqueta} de presupuesto #{reg_id}{sufijo} (anual): ${monto:,.2f}/año "
             f"→ ${mensual:,.2f}/mes en totales [{cat}]."
         )
-    return True, f"{etiqueta} de presupuesto #{reg_id}: ${monto:,.2f} [{cat}]."
+    return True, f"{etiqueta} de presupuesto #{reg_id}{sufijo}: ${monto:,.2f} [{cat}]."
 
 
 def obtener_presupuesto_registro(user_id: int, registro_id: int) -> dict | None:
@@ -839,25 +1000,65 @@ def editar_presupuesto_registro(
     return True, f"Registro de presupuesto #{registro_id} actualizado: {', '.join(cambios)}."
 
 
-def listar_presupuesto(user_id: int) -> list[dict]:
-    """Lista todos los movimientos de presupuesto del usuario."""
+def eliminar_presupuesto_registro(user_id: int, registro_id: int) -> tuple[bool, str]:
+    """Elimina una línea de presupuesto por ID (único entre todos los presupuestos del usuario)."""
+    reg = obtener_presupuesto_registro(user_id, registro_id)
+    if not reg:
+        return False, "No se encontró el registro o no te pertenece."
+    pid = reg.get("presupuesto_id")
+    nombre_pres = "?"
     with get_connection() as conn:
+        if pid is not None:
+            pr = conn.execute(
+                "SELECT nombre FROM presupuestos WHERE id = ? AND user_id = ?",
+                (pid, user_id),
+            ).fetchone()
+            if pr:
+                nombre_pres = pr[0]
+        conn.execute(
+            "DELETE FROM presupuesto_movimientos WHERE id = ? AND user_id = ?",
+            (registro_id, user_id),
+        )
+    tipo = reg["tipo"]
+    monto = reg["monto"]
+    cat = reg.get("categoria", "")
+    return True, (
+        f"Línea #{registro_id} eliminada del presupuesto «{nombre_pres}» "
+        f"({tipo}, [{cat}] ${monto:,.2f})."
+    )
+
+
+def listar_presupuesto(user_id: int, presupuesto_id: int) -> list[dict]:
+    """Lista movimientos de un presupuesto concreto."""
+    with get_connection() as conn:
+        ok = conn.execute(
+            "SELECT 1 FROM presupuestos WHERE id = ? AND user_id = ?",
+            (presupuesto_id, user_id),
+        ).fetchone()
+        if not ok:
+            return []
         rows = conn.execute(
             """SELECT id, tipo, monto, categoria, COALESCE(es_anual, 0) AS es_anual, creada_en
                FROM presupuesto_movimientos
-               WHERE user_id = ?
+               WHERE user_id = ? AND presupuesto_id = ?
                ORDER BY categoria COLLATE NOCASE ASC, tipo DESC, id ASC""",
-            (user_id,),
+            (user_id, presupuesto_id),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def totales_presupuesto(user_id: int) -> dict:
-    """Totales de gastos e ingresos planificados del presupuesto del usuario.
+def totales_presupuesto(user_id: int, presupuesto_id: int) -> dict:
+    """Totales de un presupuesto concreto.
 
     Los gastos marcados como anuales cuentan como monto/12 en el total de gastos mensual.
     """
     with get_connection() as conn:
+        ok = conn.execute(
+            "SELECT 1 FROM presupuestos WHERE id = ? AND user_id = ?",
+            (presupuesto_id, user_id),
+        ).fetchone()
+        if not ok:
+            return {"total_gasto": 0.0, "total_ingreso": 0.0, "balance": 0.0}
         row = conn.execute(
             """SELECT
                    COALESCE(SUM(CASE WHEN tipo = 'gasto' THEN
@@ -865,8 +1066,8 @@ def totales_presupuesto(user_id: int) -> dict:
                    ELSE 0 END), 0) AS total_gasto,
                    COALESCE(SUM(CASE WHEN tipo = 'ingreso' THEN monto ELSE 0 END), 0) AS total_ingreso
                FROM presupuesto_movimientos
-               WHERE user_id = ?""",
-            (user_id,),
+               WHERE user_id = ? AND presupuesto_id = ?""",
+            (user_id, presupuesto_id),
         ).fetchone()
     g = row["total_gasto"] if row else 0.0
     i = row["total_ingreso"] if row else 0.0

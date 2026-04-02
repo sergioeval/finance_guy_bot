@@ -44,10 +44,13 @@ async def post_init(application: Application) -> None:
         BotCommand("resumen_categorias", "Resumen por categoría"),
         BotCommand("resumen_mes", "Resumen mensual"),
         BotCommand("ajustar", "Ajustar saldo de una cuenta"),
-        BotCommand("gasto_presupuesto", "Gasto al presupuesto mensual"),
-        BotCommand("ingreso_presupuesto", "Ingreso al presupuesto mensual"),
+        BotCommand("presupuestos", "Listar presupuestos por nombre"),
+        BotCommand("gasto_presupuesto", "Gasto planificado (elige presupuesto)"),
+        BotCommand("ingreso_presupuesto", "Ingreso planificado (elige presupuesto)"),
+        BotCommand("resumen_presupuesto", "Resumen de un presupuesto o todos"),
+        BotCommand("eliminar_registro_presupuesto", "Borrar línea de presupuesto"),
+        BotCommand("clonar_presupuesto", "Copiar presupuesto con otro nombre"),
         BotCommand("editar_registro_presupuesto", "Editar registro de presupuesto"),
-        BotCommand("resumen_presupuesto", "Resumen del presupuesto mensual"),
     ])
 
     # Resumen diario automático a las 10:00 (zona configurable vía RESUMEN_DIARIO_TZ)
@@ -73,7 +76,7 @@ def main() -> None:
     app.add_handler(CommandHandler("help", commands.cmd_help))
     app.add_handler(CommandHandler("cuentas", commands.cmd_cuentas))
     app.add_handler(CommandHandler("resumen", commands.cmd_resumen))
-    app.add_handler(CommandHandler("resumen_presupuesto", presupuesto.cmd_resumen_presupuesto))
+    app.add_handler(CommandHandler("presupuestos", presupuesto.cmd_presupuestos))
     app.add_handler(CommandHandler("mis_categorias", categorias.cmd_mis_categorias))
     app.add_handler(conv_handler)
 

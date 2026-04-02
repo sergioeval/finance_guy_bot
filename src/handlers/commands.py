@@ -53,12 +53,18 @@ Los comandos piden cada parámetro <b>paso a paso</b>. Para parámetros opcional
 
 /resumen_mes — Te pedirá: año (null = últimos 12 meses), mes (null = todos)
 
-<b>Presupuesto</b> (una sola lista por usuario; tabla aparte; no afecta cuentas ni transacciones)
-/gasto_presupuesto — Monto, ¿anual?, categoría (solo de /mis_categorias para gastos)
+<b>Presupuesto</b> (varios por nombre; no afecta cuentas ni transacciones reales)
+/presupuestos — Lista nombres, #id y cantidad de líneas
 
-/ingreso_presupuesto — Monto y categoría (solo de /mis_categorias para ingresos)
+/gasto_presupuesto — Nombre del presupuesto (se crea si no existe), monto, ¿anual?, categoría
 
-/resumen_presupuesto — Lista #id, totales y balance (sin preguntas)
+/ingreso_presupuesto — Nombre del presupuesto, monto, categoría
+
+/resumen_presupuesto — Nombre del presupuesto o «todos» para ver todos; líneas #id, totales y balance
+
+/eliminar_registro_presupuesto — ID de la línea (# único entre presupuestos)
+
+/clonar_presupuesto — Presupuesto origen (nombre o #id), luego nombre del presupuesto nuevo
 
 /editar_registro_presupuesto — ID, monto y/o categoría válida en /mis_categorias (null = no cambiar)
 

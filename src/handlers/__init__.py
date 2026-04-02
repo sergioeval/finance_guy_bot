@@ -36,6 +36,12 @@ from src.config import (
     CAT_AGREGAR_AMBITO,
     CAT_EDITAR_ID,
     CAT_EDITAR_NOMBRE,
+    PRES_GASTO_NOMBRE,
+    PRES_INGRESO_NOMBRE,
+    RESUMEN_PRES_NOMBRE,
+    PRES_ELIMINAR_ID,
+    CLONAR_PRES_ORIGEN,
+    CLONAR_PRES_NUEVO_NOMBRE,
     TEXT,
 )
 from src.handlers import commands, cuentas, movimientos, historial, resumenes, presupuesto, categorias
@@ -54,10 +60,16 @@ conv_handler = ConversationHandler(
         CommandHandler("ajustar", movimientos.ajustar_start),
         CommandHandler("gasto_presupuesto", presupuesto.gasto_presupuesto_start),
         CommandHandler("ingreso_presupuesto", presupuesto.ingreso_presupuesto_start),
+        CommandHandler("resumen_presupuesto", presupuesto.resumen_presupuesto_start),
+        CommandHandler(
+            "eliminar_registro_presupuesto",
+            presupuesto.eliminar_registro_presupuesto_start,
+        ),
         CommandHandler(
             "editar_registro_presupuesto",
             presupuesto.editar_registro_presupuesto_start,
         ),
+        CommandHandler("clonar_presupuesto", presupuesto.clonar_presupuesto_start),
         CommandHandler("agregar_categoria", categorias.agregar_categoria_start),
         CommandHandler("editar_mi_categoria", categorias.editar_mi_categoria_start),
     ],
@@ -108,6 +120,7 @@ conv_handler = ConversationHandler(
             MessageHandler(TEXT, movimientos.ajustar_cuenta),
         ],
         AJUSTAR_MONTO: [MessageHandler(TEXT, movimientos.ajustar_monto)],
+        PRES_GASTO_NOMBRE: [MessageHandler(TEXT, presupuesto.gasto_presupuesto_nombre)],
         GASTO_PRESUPUESTO_MONTO: [MessageHandler(TEXT, presupuesto.gasto_presupuesto_monto)],
         GASTO_PRESUPUESTO_ANUAL: [MessageHandler(TEXT, presupuesto.gasto_presupuesto_anual)],
         GASTO_PRESUPUESTO_CATEGORIA: [
@@ -116,6 +129,7 @@ conv_handler = ConversationHandler(
             ),
             MessageHandler(TEXT, presupuesto.gasto_presupuesto_categoria),
         ],
+        PRES_INGRESO_NOMBRE: [MessageHandler(TEXT, presupuesto.ingreso_presupuesto_nombre)],
         INGRESO_PRESUPUESTO_MONTO: [MessageHandler(TEXT, presupuesto.ingreso_presupuesto_monto)],
         INGRESO_PRESUPUESTO_CATEGORIA: [
             CallbackQueryHandler(
@@ -127,6 +141,12 @@ conv_handler = ConversationHandler(
         EDITAR_PRESUPUESTO_MONTO: [MessageHandler(TEXT, presupuesto.editar_presupuesto_monto)],
         EDITAR_PRESUPUESTO_CATEGORIA: [
             MessageHandler(TEXT, presupuesto.editar_presupuesto_categoria)
+        ],
+        RESUMEN_PRES_NOMBRE: [MessageHandler(TEXT, presupuesto.resumen_presupuesto_nombre)],
+        PRES_ELIMINAR_ID: [MessageHandler(TEXT, presupuesto.eliminar_presupuesto_por_id)],
+        CLONAR_PRES_ORIGEN: [MessageHandler(TEXT, presupuesto.clonar_presupuesto_origen)],
+        CLONAR_PRES_NUEVO_NOMBRE: [
+            MessageHandler(TEXT, presupuesto.clonar_presupuesto_nuevo_nombre)
         ],
         CAT_AGREGAR_NOMBRE: [MessageHandler(TEXT, categorias.agregar_categoria_nombre)],
         CAT_AGREGAR_AMBITO: [MessageHandler(TEXT, categorias.agregar_categoria_ambito)],
@@ -147,10 +167,16 @@ conv_handler = ConversationHandler(
         CommandHandler("ajustar", movimientos.ajustar_start),
         CommandHandler("gasto_presupuesto", presupuesto.gasto_presupuesto_start),
         CommandHandler("ingreso_presupuesto", presupuesto.ingreso_presupuesto_start),
+        CommandHandler("resumen_presupuesto", presupuesto.resumen_presupuesto_start),
+        CommandHandler(
+            "eliminar_registro_presupuesto",
+            presupuesto.eliminar_registro_presupuesto_start,
+        ),
         CommandHandler(
             "editar_registro_presupuesto",
             presupuesto.editar_registro_presupuesto_start,
         ),
+        CommandHandler("clonar_presupuesto", presupuesto.clonar_presupuesto_start),
         CommandHandler("agregar_categoria", categorias.agregar_categoria_start),
         CommandHandler("editar_mi_categoria", categorias.editar_mi_categoria_start),
     ],

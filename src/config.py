@@ -37,7 +37,13 @@ from telegram.ext import ConversationHandler, filters
     CAT_AGREGAR_AMBITO,
     CAT_EDITAR_ID,
     CAT_EDITAR_NOMBRE,
-) = range(34)
+    PRES_GASTO_NOMBRE,
+    PRES_INGRESO_NOMBRE,
+    RESUMEN_PRES_NOMBRE,
+    PRES_ELIMINAR_ID,
+    CLONAR_PRES_ORIGEN,
+    CLONAR_PRES_NUEVO_NOMBRE,
+) = range(40)
 
 END = ConversationHandler.END
 
